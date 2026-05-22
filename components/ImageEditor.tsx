@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Language } from "../types";
 import { TRANSLATIONS } from "../constants";
 
@@ -12,6 +12,51 @@ interface ImageEditorProps {
   lang: Language;
   onSave: (newBlob: Blob) => void;
   onCancel: () => void;
+}
+
+interface FilterValues {
+  brightness: number;
+  contrast: number;
+  denoise: number;
+  sharpness: number;
+  clarity: number;
+  upscale: number;
+}
+
+interface FilterPreset extends FilterValues {
+  name: string;
+}
+
+const DEFAULT_FILTERS: FilterValues = {
+  brightness: 100,
+  contrast: 100,
+  denoise: 0,
+  sharpness: 0,
+  clarity: 0,
+  upscale: 1,
+};
+
+const FILTER_STORAGE_KEY = "ps_editor_presets";
+
+function filterValuesToCss(f: FilterValues): string {
+  const parts = [`brightness(${f.brightness}%)`, `contrast(${f.contrast}%)`];
+  if (f.denoise > 0) {
+    parts.push(`blur(${(f.denoise / 100 * 1.2).toFixed(2)}px)`);
+  }
+  return parts.join(" ");
+}
+
+function loadPresets(): FilterPreset[] {
+  try {
+    const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePresets(presets: FilterPreset[]) {
+  localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(presets));
 }
 
 function computeHomography(
@@ -103,6 +148,61 @@ function bilinearSample(
   ) as [number, number, number, number];
 }
 
+// Convolution helpers
+function applyConv3x3(data: ImageData, w: number, h: number, kernel: number[], strength: number): ImageData {
+  if (strength <= 0) return data;
+  const src = new Uint8ClampedArray(data.data);
+  const out = data.data;
+  const k = kernel;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        let sum = 0;
+        let ki = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            sum += src[((y + dy) * w + (x + dx)) * 4 + c] * k[ki++];
+          }
+        }
+        const orig = src[i + c];
+        out[i + c] = Math.round(orig + (sum - orig) * strength);
+      }
+      out[i + 3] = src[i + 3];
+    }
+  }
+  return data;
+}
+
+function applyClarity(data: ImageData, w: number, h: number, strength: number): ImageData {
+  if (strength <= 0) return data;
+  const src = new Uint8ClampedArray(data.data);
+  const out = data.data;
+  const blurKernel = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+  const blurDiv = 16;
+  for (let y = 2; y < h - 2; y++) {
+    for (let x = 2; x < w - 2; x++) {
+      const i = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        let blurred = 0;
+        let ki = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            blurred += src[((y + dy) * w + (x + dx)) * 4 + c] * blurKernel[ki++];
+          }
+        }
+        blurred /= blurDiv;
+        const detail = src[i + c] - blurred;
+        out[i + c] = Math.round(src[i + c] + detail * (strength * 1.2));
+      }
+      out[i + 3] = src[i + 3];
+    }
+  }
+  return data;
+}
+
+const RANGE_SLIDER_CLASS = "w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-indigo-600";
+
 const ImageEditor: React.FC<ImageEditorProps> = ({
   imageBlob,
   lang,
@@ -121,18 +221,18 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingBlob, setPendingBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [filters, setFilters] = useState<FilterValues>({ ...DEFAULT_FILTERS });
+  const [presets, setPresets] = useState<FilterPreset[]>(loadPresets);
+  const [presetNameInput, setPresetNameInput] = useState("");
 
-  // Base dimensions (fitting the screen initially)
   const [baseSize, setBaseSize] = useState({ width: 0, height: 0 });
 
-  // Crop points (stored in baseSize coordinates)
   const [cropRect, setCropRect] = useState<{
     x: number;
     y: number;
     w: number;
     h: number;
   }>({ x: 50, y: 50, w: 200, h: 200 });
-  // Perspective points (stored in baseSize coordinates)
   const [points, setPoints] = useState<Point[]>([
     { x: 50, y: 50 },
     { x: 250, y: 50 },
@@ -151,9 +251,8 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     img.src = url;
     img.onload = () => {
       setImage(img);
-      // Calculate a reasonable base size that fits the screen
-      const maxWidth = window.innerWidth * 0.8;
-      const maxHeight = window.innerHeight * 0.6;
+      const maxWidth = window.innerWidth * 0.65;
+      const maxHeight = window.innerHeight * 0.75;
 
       let w = img.width;
       let h = img.height;
@@ -179,7 +278,6 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     return () => URL.revokeObjectURL(url);
   }, [imageBlob]);
 
-  // Global mouse tracking for smooth corner control
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (isDragging && dragIdx !== null) {
@@ -204,25 +302,89 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     }
   }, [isDragging, dragIdx]);
 
-  const draw = () => {
+  // Drive drag from globalMousePos so cursor can leave canvas
+  useEffect(() => {
+    if (!isDragging || dragIdx === null) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    const x = (globalMousePos.x - rect.left) / zoom;
+    const y = (globalMousePos.y - rect.top) / zoom;
+
+    const clampedX = Math.max(0, Math.min(baseSize.width, x));
+    const clampedY = Math.max(0, Math.min(baseSize.height, y));
+
+    if (mode === "perspective") {
+      const newPoints = [...points];
+      newPoints[dragIdx as number] = { x: clampedX, y: clampedY };
+      setPoints(newPoints);
+    } else {
+      if (dragIdx === "rect") {
+        const nx = Math.max(0, Math.min(baseSize.width - cropRect.w, clampedX - offset.x));
+        const ny = Math.max(0, Math.min(baseSize.height - cropRect.h, clampedY - offset.y));
+        setCropRect((prev) => ({ ...prev, x: nx, y: ny }));
+      } else {
+        const idx = dragIdx as number;
+        setCropRect((prev) => {
+          let { x: nx, y: ny, w: nw, h: nh } = prev;
+          if (idx === 0) {
+            nw += nx - clampedX;
+            nh += ny - clampedY;
+            nx = clampedX;
+            ny = clampedY;
+          } else if (idx === 1) {
+            nw = clampedX - nx;
+            nh += ny - clampedY;
+            ny = clampedY;
+          } else if (idx === 2) {
+            nw = clampedX - nx;
+            nh = clampedY - ny;
+          } else if (idx === 3) {
+            nw += nx - clampedX;
+            nh = clampedY - ny;
+            nx = clampedX;
+          }
+          return { x: nx, y: ny, w: Math.max(20, nw), h: Math.max(20, nh) };
+        });
+      }
+    }
+  }, [isDragging, dragIdx, globalMousePos, zoom, baseSize, mode, cropRect, points, offset]);
+
+  const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !image || baseSize.width === 0) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Apply zoom to canvas resolution
     canvas.width = baseSize.width * zoom;
     canvas.height = baseSize.height * zoom;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw image scaled by zoom
+    ctx.save();
+    ctx.filter = filterValuesToCss(filters);
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    // Apply sharpness and clarity via pixel processing on preview
+    if (filters.sharpness > 0 || filters.clarity > 0) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const imgData = ctx.getImageData(0, 0, w, h);
+      if (filters.sharpness > 0) {
+        const s = filters.sharpness / 100;
+        applyConv3x3(imgData, w, h, [0, -s, 0, -s, 1 + 4 * s, -s, 0, -s, 0], 1);
+      }
+      if (filters.clarity > 0) {
+        applyClarity(imgData, w, h, filters.clarity / 100);
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
 
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
 
     if (mode === "crop") {
-      // Outer shadow
       ctx.beginPath();
       ctx.rect(0, 0, canvas.width, canvas.height);
       ctx.rect(
@@ -233,7 +395,6 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
       );
       ctx.fill("evenodd");
 
-      // Border
       ctx.strokeStyle = "#6366f1";
       ctx.lineWidth = 2;
       ctx.strokeRect(
@@ -243,24 +404,27 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
         cropRect.h * zoom,
       );
 
-      // Handles
-      ctx.fillStyle = "#6366f1";
       const handles = [
         { x: cropRect.x, y: cropRect.y },
         { x: cropRect.x + cropRect.w, y: cropRect.y },
         { x: cropRect.x + cropRect.w, y: cropRect.y + cropRect.h },
         { x: cropRect.x, y: cropRect.y + cropRect.h },
       ];
+      ctx.shadowColor = "rgba(99, 102, 241, 0.6)";
+      ctx.shadowBlur = 10;
       handles.forEach((p) => {
+        ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.arc(p.x * zoom, p.y * zoom, 8, 0, Math.PI * 2);
+        ctx.arc(p.x * zoom, p.y * zoom, 10, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.fillStyle = "#6366f1";
+        ctx.beginPath();
+        ctx.arc(p.x * zoom, p.y * zoom, 7, 0, Math.PI * 2);
+        ctx.fill();
       });
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
     } else {
-      // Perspective logic
       ctx.beginPath();
       ctx.moveTo(points[0].x * zoom, points[0].y * zoom);
       for (let i = 1; i < 4; i++)
@@ -270,6 +434,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
       ctx.save();
       ctx.clip();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.filter = filterValuesToCss(filters);
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
       ctx.restore();
 
@@ -290,32 +455,36 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
       ctx.closePath();
       ctx.stroke();
 
+      ctx.shadowColor = "rgba(99, 102, 241, 0.6)";
+      ctx.shadowBlur = 10;
       points.forEach((p) => {
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(p.x * zoom, p.y * zoom, 12, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = "#6366f1";
         ctx.beginPath();
-        ctx.arc(p.x * zoom, p.y * zoom, 10, 0, Math.PI * 2);
+        ctx.arc(p.x * zoom, p.y * zoom, 8, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 2;
-        ctx.stroke();
       });
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
     }
-  };
+  }, [image, mode, points, cropRect, zoom, baseSize, filters]);
 
   useEffect(() => {
     draw();
-  }, [image, mode, points, cropRect, zoom, baseSize]);
+  }, [draw]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
 
-    // Convert click to "base coordinates" by dividing by zoom
     const x = (e.clientX - rect.left) / zoom;
     const y = (e.clientY - rect.top) / zoom;
 
-    const handleRadius = 20 / zoom; // Increased hit area for better usability
+    const handleRadius = 30 / zoom;
 
     if (mode === "perspective") {
       const idx = points.findIndex(
@@ -354,95 +523,68 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || dragIdx === null) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-
-    // Use global mouse position for smooth tracking
-    const x = (globalMousePos.x - rect.left) / zoom;
-    const y = (globalMousePos.y - rect.top) / zoom;
-
-    // Allow movement beyond canvas bounds for better control
-    const clampedX = Math.max(
-      -baseSize.width * 0.5,
-      Math.min(baseSize.width * 1.5, x),
-    );
-    const clampedY = Math.max(
-      -baseSize.height * 0.5,
-      Math.min(baseSize.height * 1.5, y),
-    );
-
-    if (mode === "perspective") {
-      const newPoints = [...points];
-      newPoints[dragIdx as number] = { x: clampedX, y: clampedY };
-      setPoints(newPoints);
-    } else {
-      if (dragIdx === "rect") {
-        const nx = Math.max(
-          0,
-          Math.min(baseSize.width - cropRect.w, clampedX - offset.x),
-        );
-        const ny = Math.max(
-          0,
-          Math.min(baseSize.height - cropRect.h, clampedY - offset.y),
-        );
-        setCropRect((prev) => ({ ...prev, x: nx, y: ny }));
-      } else {
-        const idx = dragIdx as number;
-        setCropRect((prev) => {
-          let { x: nx, y: ny, w: nw, h: nh } = prev;
-          if (idx === 0) {
-            nw += nx - clampedX;
-            nh += ny - clampedY;
-            nx = clampedX;
-            ny = clampedY;
-          } else if (idx === 1) {
-            nw = clampedX - nx;
-            nh += ny - clampedY;
-            ny = clampedY;
-          } else if (idx === 2) {
-            nw = clampedX - nx;
-            nh = clampedY - ny;
-          } else if (idx === 3) {
-            nw += nx - clampedX;
-            nh = clampedY - ny;
-            nx = clampedX;
-          }
-          return { x: nx, y: ny, w: Math.max(20, nw), h: Math.max(20, nh) };
-        });
-      }
-    }
-  };
-
   const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom((prev) => Math.max(0.5, Math.min(5, prev + delta)));
-    }
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom((prev) => Math.max(0.5, Math.min(5, prev + delta)));
   };
+
+  function processPixels(
+    srcCanvas: HTMLCanvasElement,
+    srcCtx: CanvasRenderingContext2D,
+    filterStr: string,
+    srcW: number,
+    srcH: number,
+  ) {
+    srcCtx.filter = filterStr;
+    srcCtx.drawImage(image!, 0, 0, srcW, srcH);
+    const imgData = srcCtx.getImageData(0, 0, srcW, srcH);
+    if (filters.sharpness > 0) {
+      const s = filters.sharpness / 100;
+      applyConv3x3(imgData, srcW, srcH, [0, -s, 0, -s, 1 + 4 * s, -s, 0, -s, 0], 1);
+    }
+    if (filters.clarity > 0) {
+      applyClarity(imgData, srcW, srcH, filters.clarity / 100);
+    }
+    srcCtx.putImageData(imgData, 0, 0);
+  }
 
   const handleApply = async () => {
     if (!image || !canvasRef.current) return;
     setIsProcessing(true);
 
     const scale = image.width / baseSize.width;
+    const filterStr = filterValuesToCss(filters);
+    const upscaleFactor = filters.upscale;
 
     if (mode === "crop") {
+      const outW = Math.round(cropRect.w * scale * upscaleFactor);
+      const outH = Math.round(cropRect.h * scale * upscaleFactor);
       const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      canvas.width = cropRect.w * scale;
-      canvas.height = cropRect.h * scale;
-      ctx.drawImage(
+      const srcCanvas = document.createElement("canvas");
+      srcCanvas.width = outW;
+      srcCanvas.height = outH;
+      const srcCtx = srcCanvas.getContext("2d")!;
+      srcCtx.filter = filterStr;
+      srcCtx.drawImage(
         image,
         cropRect.x * scale, cropRect.y * scale,
         cropRect.w * scale, cropRect.h * scale,
-        0, 0, canvas.width, canvas.height,
+        0, 0, outW, outH,
       );
+      const imgData = srcCtx.getImageData(0, 0, outW, outH);
+      if (filters.sharpness > 0) {
+        const s = filters.sharpness / 100;
+        applyConv3x3(imgData, outW, outH, [0, -s, 0, -s, 1 + 4 * s, -s, 0, -s, 0], 1);
+      }
+      if (filters.clarity > 0) {
+        applyClarity(imgData, outW, outH, filters.clarity / 100);
+      }
+      ctx.putImageData(imgData, 0, 0);
       canvas.toBlob((blob) => {
         setIsProcessing(false);
         if (blob) { setPendingBlob(blob); setShowConfirm(true); }
@@ -451,14 +593,16 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     } else {
       const src = points.map((p) => ({ x: p.x * scale, y: p.y * scale }));
 
-      const outW = Math.round(Math.max(
+      let outW = Math.round(Math.max(
         Math.hypot(src[1].x - src[0].x, src[1].y - src[0].y),
         Math.hypot(src[2].x - src[3].x, src[2].y - src[3].y),
       ));
-      const outH = Math.round(Math.max(
+      let outH = Math.round(Math.max(
         Math.hypot(src[3].x - src[0].x, src[3].y - src[0].y),
         Math.hypot(src[2].x - src[1].x, src[2].y - src[1].y),
       ));
+      outW = Math.round(outW * upscaleFactor);
+      outH = Math.round(outH * upscaleFactor);
 
       const dst = [
         { x: 0,    y: 0    },
@@ -481,6 +625,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
       srcCanvas.width = image.width;
       srcCanvas.height = image.height;
       const srcCtx = srcCanvas.getContext("2d")!;
+      srcCtx.filter = filterStr;
       srcCtx.drawImage(image, 0, 0);
       const srcData = srcCtx.getImageData(0, 0, image.width, image.height);
       const outData = ctx.createImageData(outW, outH);
@@ -496,8 +641,18 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
           outData.data[i + 3] = color[3];
         }
       }
-
       ctx.putImageData(outData, 0, 0);
+
+      const finalData = ctx.getImageData(0, 0, outW, outH);
+      if (filters.sharpness > 0) {
+        const s = filters.sharpness / 100;
+        applyConv3x3(finalData, outW, outH, [0, -s, 0, -s, 1 + 4 * s, -s, 0, -s, 0], 1);
+      }
+      if (filters.clarity > 0) {
+        applyClarity(finalData, outW, outH, filters.clarity / 100);
+      }
+      ctx.putImageData(finalData, 0, 0);
+
       canvas.toBlob((blob) => {
         setIsProcessing(false);
         if (blob) { setPendingBlob(blob); setShowConfirm(true); }
@@ -511,27 +666,67 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     }
   };
 
+  const updateFilter = (key: keyof FilterValues, value: number) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resetFilters = () => {
+    setFilters({ ...DEFAULT_FILTERS });
+  };
+
+  const savePreset = () => {
+    const name = presetNameInput.trim();
+    if (!name) return;
+    const newPreset: FilterPreset = { name, ...filters };
+    const updated = [...presets, newPreset];
+    setPresets(updated);
+    savePresets(updated);
+    setPresetNameInput("");
+  };
+
+  const applyPreset = (preset: FilterValues) => {
+    setFilters({ ...preset });
+  };
+
+  const deletePreset = (idx: number) => {
+    const updated = presets.filter((_, i) => i !== idx);
+    setPresets(updated);
+    savePresets(updated);
+  };
+
+  const slider = (
+    label: string,
+    key: keyof FilterValues,
+    min: number,
+    max: number,
+    unit: string,
+    step?: number,
+  ) => (
+    <div>
+      <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <span>{label}</span>
+        <span className="font-mono font-bold">{filters[key]}{unit}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step ?? 1}
+        value={filters[key]}
+        onChange={(e) => updateFilter(key, Number(e.target.value))}
+        className={RANGE_SLIDER_CLASS}
+      />
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-0 md:p-4">
-      <div className="bg-white rounded-none md:rounded-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-screen md:max-h-[95vh] shadow-2xl relative">
-        {/* Confirmation Overlay */}
+    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-0">
+      <div className="bg-white w-full h-full max-w-[98vw] max-h-[98vh] overflow-hidden flex flex-col shadow-2xl relative rounded-none md:rounded-2xl">
         {showConfirm && (
           <div className="absolute inset-0 z-[110] bg-black/50 flex items-center justify-center backdrop-blur-sm p-4 text-center">
             <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full">
               <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M5 13l4 4L19 7"
-                  ></path>
-                </svg>
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
               </div>
               <h4 className="text-xl font-bold mb-2">
                 {isRtl ? "تأكيد الحفظ؟" : "Confirm Save?"}
@@ -542,174 +737,104 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
                   : "The original file will be permanently replaced with this edit."}
               </p>
               <div className="flex gap-3">
-                <button
-                  onClick={() => setShowConfirm(false)}
-                  className="flex-1 px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-xl transition"
-                >
-                  {t("cancel")}
-                </button>
-                <button
-                  onClick={confirmSave}
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg"
-                >
-                  {t("save")}
-                </button>
+                <button onClick={() => setShowConfirm(false)} className="flex-1 px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-xl transition">{t("cancel")}</button>
+                <button onClick={confirmSave} className="flex-1 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg">{t("save")}</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Header Toolbar */}
-        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4 bg-gray-50/50">
-          <div className="flex items-center gap-3">
-            <h3 className="font-bold text-lg hidden sm:block">{t("edit")}</h3>
-            <div className="flex bg-white rounded-lg p-1 shadow-sm border border-gray-200">
-              <button
-                onClick={() => setMode("crop")}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition ${
-                  mode === "crop"
-                    ? "bg-indigo-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {t("normalCrop")}
-              </button>
-              <button
-                onClick={() => setMode("perspective")}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition ${
-                  mode === "perspective"
-                    ? "bg-indigo-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {t("perspectiveCut")}
-              </button>
+        {/* Header */}
+        <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-sm hidden sm:block">{t("edit")}</h3>
+            <div className="flex bg-white rounded-lg p-0.5 shadow-sm border border-gray-200">
+              <button onClick={() => setMode("crop")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "crop" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{t("normalCrop")}</button>
+              <button onClick={() => setMode("perspective")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "perspective" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{t("perspectiveCut")}</button>
             </div>
           </div>
 
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-2 bg-white rounded-lg p-1 shadow-sm border border-gray-200">
-            <button
-              onClick={() => setZoom((prev) => Math.max(0.5, prev - 0.25))}
-              className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600"
-              title="Zoom Out"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M20 12H4"
-                ></path>
-              </svg>
+          <div className="flex items-center gap-1.5 bg-white rounded-lg p-0.5 shadow-sm border border-gray-200">
+            <button onClick={() => setZoom((prev) => Math.max(0.5, prev - 0.25))} className="p-1 hover:bg-gray-100 rounded text-gray-600" title="Zoom Out">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"></path></svg>
             </button>
-            <span className="text-xs font-bold text-gray-500 min-w-[3.5rem] text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              onClick={() => setZoom((prev) => Math.min(5, prev + 0.25))}
-              className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600"
-              title="Zoom In"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 4v16m8-8H4"
-                ></path>
-              </svg>
+            <span className="text-[11px] font-bold text-gray-500 min-w-[3rem] text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom((prev) => Math.min(5, prev + 0.25))} className="p-1 hover:bg-gray-100 rounded text-gray-600" title="Zoom In">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
             </button>
-            <div className="w-px h-4 bg-gray-200 mx-1" />
-            <button
-              onClick={() => setZoom(1)}
-              className="px-2 py-1 hover:bg-gray-100 rounded-md text-[10px] font-bold text-indigo-600 uppercase"
-            >
-              Reset
-            </button>
-          </div>
-
-          <div className="hidden sm:block text-[10px] text-gray-400 font-medium">
-            {isRtl
-              ? "استخدم عجلة الفأرة مع Ctrl للتقريب"
-              : "Use Mouse Wheel + Ctrl to Zoom"}
+            <div className="w-px h-3 bg-gray-200 mx-0.5" />
+            <button onClick={() => setZoom(1)} className="px-1.5 py-0.5 hover:bg-gray-100 rounded text-[10px] font-bold text-indigo-600 uppercase">{isRtl ? "إعادة" : "Reset"}</button>
           </div>
         </div>
 
-        {/* Main Canvas Area */}
-        <div
-          ref={containerRef}
-          onWheel={handleWheel}
-          className="flex-1 overflow-auto bg-gray-900/50 flex items-center justify-center p-12 min-h-[40vh]"
-        >
-          <div className="relative shadow-2xl bg-white/5 p-2">
-            <canvas
-              ref={canvasRef}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={() => {
-                if (isDragging) {
-                  setIsDragging(false);
-                  setDragIdx(null);
-                }
-              }}
-              onMouseLeave={() => {
-                if (isDragging) {
-                  setIsDragging(false);
-                  setDragIdx(null);
-                }
-              }}
-              className="cursor-crosshair bg-white"
-            />
+        {/* Body */}
+        <div className="flex flex-1 overflow-hidden">
+          <div ref={containerRef} onWheel={handleWheel} className="flex-1 overflow-auto bg-gray-900/50 flex items-center justify-center p-2">
+            <div className="relative shadow-2xl bg-white/5 inline-block">
+              <canvas
+                ref={canvasRef}
+                onMouseDown={handleMouseDown}
+                className="cursor-crosshair bg-white"
+                style={{ maxWidth: "none" }}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
-          <button
-            onClick={onCancel}
-            className="px-6 py-2.5 text-gray-600 font-bold hover:bg-gray-200/50 rounded-xl transition text-sm"
-          >
-            {t("cancel")}
-          </button>
-          <button
-            onClick={handleApply}
-            disabled={isProcessing}
-            className="px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 text-sm flex items-center gap-2"
-          >
-            {isProcessing && (
-              <svg
-                className="animate-spin h-4 w-4 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-            )}
-            {t("save")}
-          </button>
+          {/* Right sidebar */}
+          <div className="w-64 border-l border-gray-100 bg-gray-50/30 flex flex-col overflow-y-auto shrink-0">
+            <div className="p-3 border-b border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">{isRtl ? "التأثيرات" : "Effects"}</h4>
+                <button onClick={resetFilters} className="text-[10px] text-indigo-600 font-bold hover:underline">{isRtl ? "إعادة تعيين" : "Reset"}</button>
+              </div>
+              <div className="space-y-2.5">
+                {slider(isRtl ? "سطوع" : "Brightness", "brightness", 0, 200, "%")}
+                {slider(isRtl ? "تباين" : "Contrast", "contrast", 0, 200, "%")}
+                {slider(isRtl ? "تقليل الضوضاء" : "Denoise", "denoise", 0, 100, "%")}
+                {slider(isRtl ? "حدة" : "Sharpness", "sharpness", 0, 100, "%")}
+                {slider(isRtl ? "وضوح" : "Clarity", "clarity", 0, 100, "%")}
+                {slider(isRtl ? "تكبير" : "Upscale", "upscale", 1, 4, "×", 0.5)}
+              </div>
+            </div>
+
+            {/* Presets */}
+            <div className="p-3 border-b border-gray-100">
+              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">{isRtl ? "الإعدادات المحفوظة" : "Presets"}</h4>
+              {presets.length > 0 ? (
+                <div className="space-y-1 mb-3">
+                  {presets.map((p, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <button onClick={() => applyPreset(p)} className="flex-1 text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition border border-transparent hover:border-indigo-200 truncate">{p.name}</button>
+                      <button onClick={() => deletePreset(i)} className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition" title={isRtl ? "حذف" : "Delete"}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-400 mb-3">{isRtl ? "لا توجد إعدادات محفوظة" : "No saved presets"}</p>
+              )}
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={presetNameInput}
+                  onChange={(e) => setPresetNameInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") savePreset(); }}
+                  placeholder={isRtl ? "اسم الإعداد" : "Preset name"}
+                  className="flex-1 min-w-0 text-xs px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+                <button onClick={savePreset} disabled={!presetNameInput.trim()} className="px-2.5 py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 transition disabled:opacity-40 shrink-0">{isRtl ? "حفظ" : "Save"}</button>
+              </div>
+            </div>
+
+            <div className="p-3 mt-auto flex flex-col gap-2">
+              <button onClick={handleApply} disabled={isProcessing} className="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg text-sm flex items-center justify-center gap-2">
+                {isProcessing && (<svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>)}
+                {isRtl ? "حفظ التغييرات" : "Save Changes"}
+              </button>
+              <button onClick={onCancel} className="w-full py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-xl transition text-sm">{t("cancel")}</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
