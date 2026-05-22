@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Language, PrintJob, PrintStatus, ShopSettings, DiscountRule, DiscountType, ConditionType, PaperType } from "../types";
+import { Language, PrintJob, PrintStatus, PaymentStatus, ShopSettings, DiscountRule, DiscountType, ConditionType, PaperType } from "../types";
 import { TRANSLATIONS } from "../constants";
 import { storageService } from "../services/storageService";
 import {
@@ -122,12 +122,14 @@ const AdminView: React.FC<AdminViewProps> = ({
   const [gmailClientId, setGmailClientId] = useState("");
   const [gmailClientSecret, setGmailClientSecret] = useState("");
   const [gmailHasSecret, setGmailHasSecret] = useState(false);
+  const [gmailPolling, setGmailPolling] = useState(false);
+  const [gmailDisconnectConfirm, setGmailDisconnectConfirm] = useState(false);
   const [gmailPollResult, setGmailPollResult] = useState<string | null>(null);
   const [gmailPending, setGmailPending] = useState<any[]>([]);
   const [gmailSelectedIds, setGmailSelectedIds] = useState<Set<number>>(new Set());
   const [gmailImporting, setGmailImporting] = useState(false);
   const [gmailShowCredentials, setGmailShowCredentials] = useState(false);
-  const [gmailPollingActive, setGmailPollingActive] = useState(false);
+
   const [gmailLastPolledAt, setGmailLastPolledAt] = useState<string | null>(null);
   const [gmailIsPolling, setGmailIsPolling] = useState(false);
   const [gmailReviewOpen, setGmailReviewOpen] = useState(false);
@@ -138,6 +140,13 @@ const AdminView: React.FC<AdminViewProps> = ({
 
   const [previewJob, setPreviewJob] = useState<PrintJob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const [paymentEditJob, setPaymentEditJob] = useState<PrintJob | null>(null);
+  const [paymentEditStatus, setPaymentEditStatus] = useState<string>(PaymentStatus.UNPAID);
+  const [paymentEditAmount, setPaymentEditAmount] = useState<number>(0);
+  const [backupRestoreOpen, setBackupRestoreOpen] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   const handlePreview = async (job: PrintJob) => {
     const url = await storageService.getFileUrl(job.id);
@@ -169,11 +178,7 @@ const AdminView: React.FC<AdminViewProps> = ({
       setGmailEmail(status.email || "");
       setGmailClientId(settings.clientId || "");
       setGmailHasSecret(settings.hasClientSecret || false);
-      setGmailPollInterval(settings.pollInterval || 60);
       setGmailReplyTemplate(settings.replyTemplate || "");
-      const pollStatus = await storageService.getGmailPollStatus();
-      setGmailLastPolledAt(pollStatus.lastPolledAt);
-      setGmailIsPolling(pollStatus.isPolling);
     } catch (err) {
       console.error("Failed to load Gmail status:", err);
     }
@@ -184,7 +189,6 @@ const AdminView: React.FC<AdminViewProps> = ({
       const pending = await storageService.getGmailPending();
       setGmailPending(pending);
       gmailPendingCountRef.current = pending.length;
-      if (pending.length > 0) setGmailPollingActive(true);
     } catch (err) {
       console.error("Failed to load pending emails:", err);
     }
@@ -240,22 +244,32 @@ const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handleGmailDisconnect = async () => {
+  const handleGmailDisconnect = () => {
+    setGmailDisconnectConfirm(true);
+  };
+
+  const confirmGmailDisconnect = async () => {
+    setGmailDisconnectConfirm(false);
     try {
       await storageService.disconnectGmail();
       setGmailConnected(false);
       setGmailEmail("");
+      toast({ title: isRtl ? "تم قطع الاتصال بـ Gmail" : "Gmail disconnected", variant: "success" });
     } catch (err) {
-      console.error("Failed to disconnect Gmail:", err);
+      toast({ title: isRtl ? "فشل قطع الاتصال" : "Failed to disconnect", variant: "destructive" });
     }
   };
 
   const handleGmailPoll = async () => {
+    if (gmailPolling) return;
+    setGmailPolling(true);
     try {
-      await storageService.pollGmail();
+      await storageService.triggerGmailPoll();
       await loadGmailPending();
     } catch (err) {
       console.error("Failed to poll Gmail:", err);
+    } finally {
+      setGmailPolling(false);
     }
   };
 
@@ -378,17 +392,7 @@ const AdminView: React.FC<AdminViewProps> = ({
     });
   };
 
-  const [gmailPollInterval, setGmailPollInterval] = useState(60);
   const [gmailReplyTemplate, setGmailReplyTemplate] = useState("");
-
-  const handleSavePollInterval = async () => {
-    try {
-      await storageService.saveGmailPollInterval(gmailPollInterval);
-      toast({ title: isRtl ? "تم حفظ الفاصل الزمني" : "Poll interval saved", variant: "success" });
-    } catch (err) {
-      toast({ title: "Failed to save", variant: "destructive" });
-    }
-  };
 
   const handleSaveReplyTemplate = async () => {
     try {
@@ -415,43 +419,6 @@ const AdminView: React.FC<AdminViewProps> = ({
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
-
-  // Periodic Gmail poll + refresh — checks Gmail API, refreshes the pending list
-  useEffect(() => {
-    if (!gmailConnected) return;
-    const interval = setInterval(async () => {
-      const prev = gmailPendingCountRef.current;
-      try {
-        await storageService.pollGmail();
-        const pending = await storageService.getGmailPending();
-        setGmailPending(pending);
-        gmailPendingCountRef.current = pending.length;
-        if (pending.length > 0) setGmailPollingActive(true);
-        if (pending.length > prev && prev > 0) {
-          const diff = pending.length - prev;
-          toast({ title: isRtl ? `${diff} رسالة بريد إلكتروني جديدة` : `${diff} new email(s)`, description: isRtl ? "تم استلام رسائل بريد إلكتروني جديدة للطباعة" : "New emails received for printing" });
-        }
-      } catch (err) {
-        console.error("Failed to poll pending emails:", err);
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [gmailConnected, isRtl]);
-
-  // Poll health status refresh
-  useEffect(() => {
-    if (!gmailConnected) return;
-    const fetchStatus = async () => {
-      try {
-        const ps = await storageService.getGmailPollStatus();
-        setGmailLastPolledAt(ps.lastPolledAt);
-        setGmailIsPolling(ps.isPolling);
-      } catch {}
-    };
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
-  }, [gmailConnected]);
 
   // Tracks which job's copies stepper is open
   const [editingCopiesJobId, setEditingCopiesJobId] = useState<string | null>(
@@ -487,14 +454,13 @@ const AdminView: React.FC<AdminViewProps> = ({
     loadDiscountRules();
     loadGmailStatus();
     loadGmailPending();
-  }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (activeTab === "jobs") loadJobs();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [activeTab]);
+    // SSE listener — silently refresh pending table when server pushes new-email events
+    const es = new EventSource('/api/gmail/events');
+    es.onmessage = () => { loadGmailPending(); };
+    es.onerror = () => {};
+    return () => { es.close(); };
+  }, []);
 
   // Load current settings when component mounts
   useEffect(() => {
@@ -818,33 +784,43 @@ const AdminView: React.FC<AdminViewProps> = ({
 
   const confirmBulkDelete = async () => {
     const ids = Array.from(selectedJobIds);
-    for (const id of ids) {
-      await storageService.deleteJob(id);
+    try {
+      await storageService.bulkDeleteJobs(ids);
+      setSelectedJobIds(new Set());
+      setBulkDeleteConfirm(false);
+      loadJobs();
+      toast({ title: isRtl ? `تم حذف ${ids.length} ملفات` : `${ids.length} files deleted successfully`, variant: "success" });
+    } catch (err) {
+      toast({ title: isRtl ? "فشل الحذف" : "Delete failed", variant: "destructive" });
     }
-    setSelectedJobIds(new Set());
-    setBulkDeleteConfirm(false);
-    loadJobs();
-    toast({ title: isRtl ? `تم حذف ${ids.length} ملفات` : `${ids.length} files deleted successfully`, variant: "success" });
   };
 
-  const handleBulkStatusUpdate = async () => {
+  const handleBulkStatusUpdate = async (status: PrintStatus = PrintStatus.PRINTED) => {
     const ids = Array.from(selectedJobIds);
-    for (const id of ids) {
-      await storageService.updateStatus(id, PrintStatus.PRINTED);
+    try {
+      await storageService.bulkUpdateStatus(ids, status);
+      setSelectedJobIds(new Set());
+      loadJobs();
+      toast({ title: isRtl ? `تم تحديث ${ids.length} ملفات` : `${ids.length} files updated`, variant: "success" });
+    } catch (err) {
+      toast({ title: isRtl ? "فشل التحديث" : "Update failed", variant: "destructive" });
     }
-    setSelectedJobIds(new Set());
-    loadJobs();
   };
 
   const handleEdit = async (job: PrintJob) => {
-    const url = await storageService.getFileUrl(job.id);
-    if (url && job.fileType.includes("image")) {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      setEditingJob(job);
-      setEditingBlob(blob);
+    if (job.fileType.includes("pdf")) {
+      sessionStorage.setItem("ps_edit_job", job.id);
+      window.location.hash = "studio";
     } else {
-      toast({ title: isRtl ? "تحرير الصور متاح لملفات الصور فقط." : "Editing is only for image files.", variant: "destructive" });
+      const url = await storageService.getFileUrl(job.id);
+      if (url && job.fileType.includes("image")) {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        setEditingJob(job);
+        setEditingBlob(blob);
+      } else {
+        toast({ title: isRtl ? "تحرير الصور متاح لملفات الصور فقط." : "Editing is only for image files.", variant: "destructive" });
+      }
     }
   };
 
@@ -890,6 +866,55 @@ const AdminView: React.FC<AdminViewProps> = ({
       toast({ title: isRtl ? "تم تغيير كلمة المرور بنجاح" : "Password changed successfully", variant: "success" });
     } catch {
       setPasswordError(isRtl ? "كلمة المرور الحالية غير صحيحة" : "Current password is incorrect");
+    }
+  };
+
+  const handlePaymentClick = (job: PrintJob) => {
+    setPaymentEditJob(job);
+    setPaymentEditStatus(job.paymentStatus || PaymentStatus.UNPAID);
+    setPaymentEditAmount(job.paymentAmount || 0);
+  };
+
+  const handleSavePayment = async () => {
+    if (!paymentEditJob) return;
+    try {
+      await storageService.updatePaymentStatus(paymentEditJob.id, paymentEditStatus, paymentEditAmount);
+      setPaymentEditJob(null);
+      loadJobs();
+      toast({ title: isRtl ? "تم تحديث حالة الدفع" : "Payment status updated", variant: "success" });
+    } catch (err) {
+      toast({ title: isRtl ? "فشل تحديث الدفع" : "Failed to update payment", variant: "destructive" });
+    }
+  };
+
+  const handleBulkPaymentStatus = async (status: string) => {
+    const ids = Array.from(selectedJobIds);
+    try {
+      await storageService.bulkUpdatePayment(ids, status);
+      setSelectedJobIds(new Set());
+      loadJobs();
+      toast({ title: `${ids.length} ${isRtl ? "تم تحديث الدفع" : "payment(s) updated"}`, variant: "success" });
+    } catch (err) {
+      toast({ title: isRtl ? "فشل" : "Failed", variant: "destructive" });
+    }
+  };
+
+  const handleBackupDownload = () => {
+    storageService.downloadBackup();
+  };
+
+  const handleBackupRestore = async () => {
+    if (!restoreFile) return;
+    setRestoring(true);
+    try {
+      const result = await storageService.restoreBackup(restoreFile);
+      toast({ title: isRtl ? "تمت الاستعادة. يرجى إعادة تشغيل الخادم." : "Restored. Please restart the server.", variant: "success" });
+      setBackupRestoreOpen(false);
+      setRestoreFile(null);
+    } catch (err: any) {
+      toast({ title: isRtl ? "فشل الاستعادة" : "Restore failed", description: err.message, variant: "destructive" });
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -1053,11 +1078,13 @@ const AdminView: React.FC<AdminViewProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  const getFileExtension = (filename: string) => {
+  const getFileExtension = (filename: string | null | undefined) => {
+    if (!filename) return "";
     return filename.split(".").pop()?.toUpperCase() || "";
   };
 
-  const isOfficeFile = (fileType: string) => {
+  const isOfficeFile = (fileType: string | null | undefined) => {
+    if (!fileType) return false;
     return (
       fileType.includes("wordprocessingml.document") ||
       fileType.includes("msword") ||
@@ -1107,9 +1134,21 @@ const AdminView: React.FC<AdminViewProps> = ({
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("download")}</span>
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleBulkStatusUpdate} title={t("markAsPrinted")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400">
+            <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.PRINTED)} title={t("markAsPrinted")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("printed")}</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.READY)} title={t("markReady")} className="flex-col gap-1 h-auto text-inherit hover:text-blue-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("ready")}</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.PAID)} title={t("markPaid")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("paid")}</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.UNPAID)} title={t("markUnpaid")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("unpaid")}</span>
             </Button>
             <Button variant="ghost" size="sm" onClick={handleBulkDelete} title={t("bulkDelete")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
@@ -1133,9 +1172,9 @@ const AdminView: React.FC<AdminViewProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => (window.location.hash = "")}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-            {isRtl ? "صفحة الرفع" : "Upload Page"}
+          <Button variant="outline" size="sm" onClick={() => (window.location.hash = "studio")}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+            {isRtl ? "استوديو الطباعة" : "Print Studio"}
           </Button>
           <Button variant="ghost" size="sm" onClick={onLogout}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
@@ -1275,9 +1314,10 @@ const AdminView: React.FC<AdminViewProps> = ({
                   const allInGroupSelected = group.jobs.every((id) =>
                     selectedJobIds.has(id.id),
                   );
+                  const printJobs = group.jobs.filter((j) => !j.fileType?.includes("word") && !j.fileType?.includes("document") && !j.fileType?.includes("excel") && !j.fileType?.includes("spreadsheet") && !j.fileType?.includes("presentation") && !j.fileType?.includes("powerpoint"));
                   const customerTotalData = currentSettings.pricing
                     ? calculateCustomerTotalWithDiscounts(
-                        group.jobs,
+                        printJobs,
                         currentSettings,
                         jobPageCounts,
                         discountRules,
@@ -1424,6 +1464,11 @@ const AdminView: React.FC<AdminViewProps> = ({
                                 >
                                   {t("status")}
                                 </th>
+                                <th
+                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                >
+                                  {t("payment")}
+                                </th>
                                 <th className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                                   {t("actions")}
                                 </th>
@@ -1498,7 +1543,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                                                 {job.notes.length > 120 ? job.notes.slice(0, 120) + "..." : job.notes}
                                               </div>
                                               {job.notes.length > 120 && (
-                                                <button onClick={() => toggleNoteExpand(job.id)} className="text-[10px] text-indigo-500 hover:text-indigo-700 ml-1 align-middle underline">
+                                                <button type="button" onClick={() => toggleNoteExpand(job.id)} className="text-[10px] text-indigo-500 hover:text-indigo-700 ml-1 align-middle underline">
                                                   {isRtl ? "قراءة المزيد" : "Read more"}
                                                 </button>
                                               )}
@@ -1618,6 +1663,8 @@ const AdminView: React.FC<AdminViewProps> = ({
                                     <td className="px-4 py-2 align-top w-max">
                                       {(currentSettings.pricing || (currentSettings.paperTypes && currentSettings.paperTypes.length > 0)) ? (
                                         (() => {
+                                          const isOffice = job.fileType?.includes("word") || job.fileType?.includes("document") || job.fileType?.includes("excel") || job.fileType?.includes("spreadsheet") || job.fileType?.includes("presentation") || job.fileType?.includes("powerpoint");
+                                          if (isOffice) return <span className="text-xs text-gray-400">-</span>;
                                           const pageCount = jobPageCounts[job.id] || 1;
                                           const priceCalc = calculatePrintPrice(job, currentSettings, pageCount);
                                           const discountResult = calculateJobDiscount(job, priceCalc.totalPrice, pageCount, discountRules);
@@ -1672,6 +1719,33 @@ const AdminView: React.FC<AdminViewProps> = ({
                                           : job.status === PrintStatus.READY
                                           ? t("ready")
                                           : t("pending")}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 align-top">
+                                      <span
+                                        className={`px-2 py-1 text-[11px] font-bold rounded-full inline-flex items-center gap-1 cursor-pointer hover:opacity-80 ${
+                                          job.paymentStatus === PaymentStatus.PAID
+                                            ? "bg-green-100 text-green-700"
+                                            : job.paymentStatus === PaymentStatus.PARTIAL
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-red-100 text-red-700"
+                                        }`}
+                                        onClick={() => handlePaymentClick(job)}
+                                        title={isRtl ? "انقر لتعديل الدفع" : "Click to edit payment"}
+                                      >
+                                        <span className="text-[10px]">
+                                          {job.paymentStatus === PaymentStatus.PAID ? "✓" : job.paymentStatus === PaymentStatus.PARTIAL ? "◐" : "✕"}
+                                        </span>
+                                        <span>
+                                          {job.paymentStatus === PaymentStatus.PAID
+                                            ? t("paid")
+                                            : job.paymentStatus === PaymentStatus.PARTIAL
+                                            ? t("partial")
+                                            : t("unpaid")}
+                                        </span>
+                                        {job.paymentAmount ? (
+                                          <span className="text-[10px] opacity-70 font-mono">{formatPrice(job.paymentAmount)}</span>
+                                        ) : null}
                                       </span>
                                     </td>
                                     <td className="px-4 py-2 align-top">
@@ -1754,7 +1828,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                         ? (isRtl ? `متصل: ${gmailEmail}` : `Connected: ${gmailEmail}`)
                         : (isRtl ? "غير متصل" : "Not connected")}
                     </span>
-                    {gmailPending.length > 0 && (
+                    {gmailConnected && gmailPending.length > 0 && (
                       <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">
                         {gmailPending.length} {isRtl ? "بريد جديد" : "pending"}
                       </span>
@@ -1762,12 +1836,6 @@ const AdminView: React.FC<AdminViewProps> = ({
                     {gmailConnected && gmailLastPolledAt && (
                       <span className="text-xs text-gray-400">
                         {isRtl ? "آخر فحص" : "Last checked"}: {formatRelativeTime(gmailLastPolledAt, lang)}
-                        {!gmailIsPolling && <span className="ml-1 text-yellow-500">({isRtl ? "متوقف" : "stopped"})</span>}
-                      </span>
-                    )}
-                    {gmailConnected && (!gmailLastPolledAt || (Date.now() - new Date(gmailLastPolledAt).getTime() > 10 * 60 * 1000)) && (
-                      <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">
-                        ⚠️ {isRtl ? "الفحص قد يكون متوقفًا" : "Polling may be stalled"}
                       </span>
                     )}
                   </div>
@@ -1781,11 +1849,13 @@ const AdminView: React.FC<AdminViewProps> = ({
                       </Button>
                     ) : (
                       <>
-                        <Button size="sm" variant="outline" onClick={handleGmailPoll}>
-                          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <Button size="sm" variant="outline" onClick={handleGmailPoll} disabled={gmailPolling}>
+                          <svg className={`w-4 h-4 mr-1.5 ${gmailPolling ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
-                          {isRtl ? "فحص البريد الآن" : "Check Mail Now"}
+                          {gmailPolling
+                            ? (isRtl ? "جارٍ الفحص..." : "Checking...")
+                            : (isRtl ? "فحص البريد الآن" : "Check Mail Now")}
                         </Button>
                         <Button size="sm" variant="destructive" onClick={handleGmailDisconnect}>
                           <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1830,17 +1900,6 @@ const AdminView: React.FC<AdminViewProps> = ({
                   </div>
                 )}
 
-                {/* Polling Interval */}
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                  <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">
-                    {isRtl ? "فترة الفحص (ثواني)" : "Poll Interval (seconds)"}
-                  </label>
-                  <Input type="number" min={10} max={3600} value={gmailPollInterval} onChange={(e) => setGmailPollInterval(parseInt(e.target.value) || 60)} className="w-20" />
-                  <Button size="sm" variant="outline" onClick={handleSavePollInterval}>
-                    {isRtl ? "حفظ" : "Save"}
-                  </Button>
-                </div>
-
                 {/* Auto-reply Template */}
                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <h4 className="text-sm font-semibold text-gray-900 mb-2">
@@ -1866,8 +1925,11 @@ const AdminView: React.FC<AdminViewProps> = ({
                       {/* Filter bar */}
                       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 p-3 space-y-2">
                         <div className="flex items-center justify-between flex-wrap gap-2">
-                          <h4 className="font-semibold text-gray-900">
+                          <h4 className="font-semibold text-gray-900 flex items-center gap-2">
                             {isRtl ? "رسائل بريد إلكتروني جديدة" : "New Emails"}
+                            <button type="button" onClick={handleGmailPoll} disabled={gmailPolling} className="inline-flex items-center justify-center w-6 h-6 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50" title={isRtl ? "تحديث" : "Refresh"}>
+                              <svg className={`w-4 h-4 ${gmailPolling ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            </button>
                           </h4>
                           <span className="text-xs text-gray-400">{gmailFilteredPending.length} {isRtl ? "نتيجة" : "result(s)"}</span>
                         </div>
@@ -2365,6 +2427,63 @@ const AdminView: React.FC<AdminViewProps> = ({
               </CardContent>
             </Card>
 
+            {/* Backup & Restore Card */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{t("backup")}</CardTitle>
+                    <CardDescription>{isRtl ? "تنزيل أو استعادة نسخة احتياطية من قاعدة البيانات" : "Download or restore database backup"}</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <Button variant="outline" onClick={handleBackupDownload} className="gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    {t("downloadBackup")}
+                  </Button>
+                  <Button variant="outline" onClick={() => setBackupRestoreOpen(true)} className="gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    {t("restoreBackup")}
+                  </Button>
+                </div>
+                <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                  {t("restoreWarning")}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Backup Restore Dialog */}
+            <Dialog open={backupRestoreOpen} onOpenChange={(open) => { if (!open) { setBackupRestoreOpen(false); setRestoreFile(null); } }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("restoreBackup")}</DialogTitle>
+                  <DialogDescription>{t("restoreWarning")}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Input type="file" accept=".sqlite,.db" onChange={(e) => setRestoreFile(e.target.files?.[0] || null)} />
+                  {restoreFile && (
+                    <p className="text-xs text-gray-500">{restoreFile.name}</p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => { setBackupRestoreOpen(false); setRestoreFile(null); }}>
+                    {t("cancel")}
+                  </Button>
+                  <Button disabled={!restoreFile || restoring} onClick={handleBackupRestore} variant="destructive">
+                    {restoring ? (isRtl ? "جارٍ الاستعادة..." : "Restoring...") : (isRtl ? "استعادة" : "Restore")}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             {/* Quick Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-4 sm:mt-6">
               <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
@@ -2431,6 +2550,70 @@ const AdminView: React.FC<AdminViewProps> = ({
           <AlertDialogFooter>
             <AlertDialogCancel>{isRtl ? "إلغاء" : "Cancel"}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{isRtl ? "حذف" : "Delete"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Payment Edit Dialog */}
+      <Dialog open={paymentEditJob !== null} onOpenChange={(open) => { if (!open) setPaymentEditJob(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isRtl ? "تعديل حالة الدفع" : "Edit Payment Status"}</DialogTitle>
+            <DialogDescription>
+              {paymentEditJob?.fileName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {[PaymentStatus.PAID, PaymentStatus.PARTIAL, PaymentStatus.UNPAID].map((s) => (
+                <Button
+                  key={s}
+                  type="button"
+                  variant={paymentEditStatus === s ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setPaymentEditStatus(s)}
+                  className={paymentEditStatus === s ? (
+                    s === PaymentStatus.PAID ? "bg-green-600" : s === PaymentStatus.PARTIAL ? "bg-amber-600" : "bg-red-600"
+                  ) : ""}
+                >
+                  {s === PaymentStatus.PAID ? t("paid") : s === PaymentStatus.PARTIAL ? t("partial") : t("unpaid")}
+                </Button>
+              ))}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">{t("paymentAmount")} (DZD)</label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={paymentEditAmount}
+                onChange={(e) => setPaymentEditAmount(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentEditJob(null)}>{t("cancel")}</Button>
+            <Button onClick={handleSavePayment}>{t("save")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Gmail Disconnect Confirmation */}
+      <AlertDialog open={gmailDisconnectConfirm} onOpenChange={setGmailDisconnectConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{isRtl ? "قطع الاتصال بـ Gmail" : "Disconnect Gmail"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {isRtl
+                ? "هل أنت متأكد من قطع الاتصال بـ Gmail؟ لن يتم استيراد أي رسائل بريد إلكتروني جديدة حتى تعيد الاتصال."
+                : "Are you sure you want to disconnect Gmail? No new emails will be imported until you reconnect."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{isRtl ? "إلغاء" : "Cancel"}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmGmailDisconnect} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isRtl ? "قطع الاتصال" : "Disconnect"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

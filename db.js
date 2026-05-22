@@ -98,6 +98,9 @@ if (!gmailRow) {
 try { db.exec(`ALTER TABLE jobs ADD COLUMN customerEmail TEXT DEFAULT ''`); } catch (e) {}
 try { db.exec(`ALTER TABLE jobs ADD COLUMN source TEXT DEFAULT 'upload'`); } catch (e) {}
 try { db.exec(`ALTER TABLE gmail_pending ADD COLUMN discarded_at TEXT`); } catch (e) {}
+try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentStatus TEXT DEFAULT 'UNPAID'`); } catch (e) {}
+try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentAmount REAL`); } catch (e) {}
+try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentDate TEXT`); } catch (e) {}
 
 // Seed default paper types if table is empty
 const paperTypeCount = db.prepare('SELECT COUNT(*) AS count FROM paper_types').get();

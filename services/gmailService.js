@@ -91,29 +91,16 @@ export async function getGmailClient() {
 
 export async function fetchUnreadEmails() {
   const gmail = await getGmailClient();
-  const allMessageIds = [];
-  let nextPageToken = undefined;
-  const MAX_TOTAL = 100;
+  const response = await gmail.users.messages.list({
+    userId: 'me',
+    q: 'is:unread',
+    maxResults: 60,
+  });
 
-  while (allMessageIds.length < MAX_TOTAL) {
-    const response = await gmail.users.messages.list({
-      userId: 'me',
-      q: 'is:unread',
-      maxResults: Math.min(50, MAX_TOTAL - allMessageIds.length),
-      pageToken: nextPageToken,
-    });
-
-    const batch = response.data.messages || [];
-    allMessageIds.push(...batch);
-
-    nextPageToken = response.data.nextPageToken;
-    if (!nextPageToken) break;
-  }
-
-  const truncated = nextPageToken ? true : false;
+  const messageIds = response.data.messages || [];
   const emails = [];
 
-  for (const msg of allMessageIds) {
+  for (const msg of messageIds) {
     const full = await gmail.users.messages.get({
       userId: 'me',
       id: msg.id,
@@ -122,7 +109,7 @@ export async function fetchUnreadEmails() {
     emails.push(full.data);
   }
 
-  return { messages: emails, truncated };
+  return { messages: emails, truncated: false };
 }
 
 export async function markAsRead(messageId) {
