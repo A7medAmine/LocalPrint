@@ -6,9 +6,10 @@ interface LoadJobModalProps {
   onClose: () => void;
   onSelect: (job: PrintJob, file: File) => void;
   acceptType?: string;
+  filterType?: "image" | "all";
 }
 
-const LoadJobModal: React.FC<LoadJobModalProps> = ({ isOpen, onClose, onSelect, acceptType }) => {
+const LoadJobModal: React.FC<LoadJobModalProps> = ({ isOpen, onClose, onSelect, acceptType, filterType = "all" }) => {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -22,7 +23,10 @@ const LoadJobModal: React.FC<LoadJobModalProps> = ({ isOpen, onClose, onSelect, 
       try {
         const res = await fetch("/api/jobs");
         const data = await res.json();
-        const list = Array.isArray(data) ? data.filter((j: any) => j.serverFileName) : [];
+        let list = Array.isArray(data) ? data.filter((j: any) => j.serverFileName) : [];
+        if (filterType === "image") {
+          list = list.filter((j: any) => j.fileType?.startsWith("image/"));
+        }
         setJobs(list);
       } catch {
         setError("Failed to load jobs");
@@ -31,7 +35,7 @@ const LoadJobModal: React.FC<LoadJobModalProps> = ({ isOpen, onClose, onSelect, 
       }
     };
     fetchJobs();
-  }, [isOpen]);
+  }, [isOpen, filterType]);
 
   const handleSelect = async (job: any) => {
     if (!job.serverFileName) return;
@@ -67,6 +71,41 @@ const LoadJobModal: React.FC<LoadJobModalProps> = ({ isOpen, onClose, onSelect, 
             <div className="text-center text-red-500 py-8 text-sm">{error}</div>
           ) : jobs.length === 0 ? (
             <div className="text-center text-gray-400 py-8 text-sm">No print jobs with files found</div>
+          ) : filterType === "image" ? (
+            (() => {
+              const groups: Record<string, PrintJob[]> = {};
+              for (const job of jobs) {
+                const key = job.customerName?.trim() || "Anonymous";
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(job);
+              }
+              return Object.entries(groups).map(([customer, customerJobs]) => (
+                <div key={customer}>
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1 py-2 sticky top-0 bg-white z-10 border-b border-gray-100">
+                    {customer} · {customerJobs.length} {customerJobs.length === 1 ? "file" : "files"}
+                  </div>
+                  {customerJobs.map((job) => (
+                    <button
+                      key={job.id}
+                      disabled={downloading === job.id}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-indigo-50 transition disabled:opacity-50 text-left"
+                      onClick={() => handleSelect(job)}
+                    >
+                      <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-800 truncate">{job.fileName}</div>
+                        <div className="text-xs text-gray-400">{new Date(job.uploadDate).toLocaleDateString()}</div>
+                      </div>
+                      <div className="text-xs text-gray-400">{job.pageCount ? `${job.pageCount} pages` : ""}</div>
+                    </button>
+                  ))}
+                </div>
+              ));
+            })()
           ) : (
             jobs.map((job) => (
               <button

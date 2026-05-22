@@ -221,6 +221,37 @@ const CardIDTool: React.FC = () => {
   useEffect(() => { drawPreview(frontCanvasRef.current, frontDataUrl, true); }, [frontDataUrl, multiCard, cols, rows, hGap, vGap, margin, sizeIdx, paperIdx]);
   useEffect(() => { drawPreview(backCanvasRef.current, backDataUrl, false); }, [backDataUrl, multiCard, cols, rows, hGap, vGap, margin, sizeIdx, paperIdx]);
 
+  // Auto-load front/back images from bulk "Print as Card" action
+  useEffect(() => {
+    const frontKey = sessionStorage.getItem("ps_card_front");
+    const backKey = sessionStorage.getItem("ps_card_back");
+    if (!frontKey && !backKey) return;
+    sessionStorage.removeItem("ps_card_front");
+    sessionStorage.removeItem("ps_card_back");
+    (async () => {
+      if (frontKey) {
+        try {
+          const res = await fetch(`/api/files/${frontKey}`);
+          if (res.ok) {
+            const blob = await res.blob();
+            const file = new File([blob], frontKey, { type: blob.type || "image/png" });
+            await handleFrontFile(file);
+          }
+        } catch {}
+      }
+      if (backKey) {
+        try {
+          const res = await fetch(`/api/files/${backKey}`);
+          if (res.ok) {
+            const blob = await res.blob();
+            const file = new File([blob], backKey, { type: blob.type || "image/png" });
+            await handleBackFile(file);
+          }
+        } catch {}
+      }
+    })();
+  }, [handleFrontFile, handleBackFile]);
+
   const generatePdf = async (): Promise<Blob | null> => {
     if (!frontDataUrl && !backDataUrl) return null;
     setExportError("");
@@ -555,6 +586,7 @@ const CardIDTool: React.FC = () => {
         isOpen={showJobLoader}
         onClose={() => setShowJobLoader(false)}
         onSelect={jobLoaderSelect}
+        filterType="image"
       />
     </div>
   );

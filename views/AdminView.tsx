@@ -1150,6 +1150,23 @@ const AdminView: React.FC<AdminViewProps> = ({
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("unpaid")}</span>
             </Button>
+            {(() => {
+              const allJobs = groups.flatMap(g => g.jobs);
+              const selectedJobs = allJobs.filter(j => selectedJobIds.has(j.id));
+              const selectedImages = selectedJobs.filter(j => j.fileType?.startsWith("image/"));
+              const showCardBtn = selectedImages.length === 2 && selectedJobs.length === 2;
+              return showCardBtn ? (
+                <Button variant="ghost" size="sm" onClick={() => {
+                  const [front, back] = selectedImages;
+                  sessionStorage.setItem("ps_card_front", front.serverFileName || "");
+                  sessionStorage.setItem("ps_card_back", back.serverFileName || "");
+                  window.location.hash = "studio";
+                }} title="Print as Card" className="flex-col gap-1 h-auto text-inherit hover:text-pink-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                  <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{isRtl ? "بطاقة" : "Card"}</span>
+                </Button>
+              ) : null;
+            })()}
             <Button variant="ghost" size="sm" onClick={handleBulkDelete} title={t("bulkDelete")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("delete")}</span>
