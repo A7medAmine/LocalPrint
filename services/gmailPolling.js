@@ -6,6 +6,12 @@ let pollingInterval = null;
 const DEFAULT_INTERVAL_MS = 60 * 1000;
 export let lastPolledAt = null;
 
+// SSE broadcast callback — set by server.js to push events to browser clients
+let newEmailCallback = null;
+export function setNewEmailCallback(fn) {
+  newEmailCallback = fn;
+}
+
 function extractBody(payload) {
   if (payload.body && payload.body.data) {
     return Buffer.from(payload.body.data, 'base64').toString('utf8');
@@ -109,6 +115,11 @@ export async function pollGmail() {
     }
 
     lastPolledAt = new Date().toISOString();
+
+    if (newCount > 0 && newEmailCallback) {
+      newEmailCallback(newCount);
+    }
+
     return { new: newCount, skipped: skippedCount };
   } catch (err) {
     console.error('❌ Gmail poll error:', err.message);

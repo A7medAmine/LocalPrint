@@ -353,6 +353,57 @@ class StorageService {
       body: JSON.stringify({ replyTemplate: template }),
     });
   }
+
+  // ── Bulk Actions ──────────────────────────────────────────
+
+  async bulkDeleteJobs(ids: string[]): Promise<any> {
+    return this.safeFetch("/api/jobs/bulk/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+  }
+
+  async bulkUpdateStatus(ids: string[], status: PrintStatus): Promise<any> {
+    return this.safeFetch("/api/jobs/bulk/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, status }),
+    });
+  }
+
+  // ── Payment ───────────────────────────────────────────────
+
+  async updatePaymentStatus(id: string, paymentStatus: string, paymentAmount?: number): Promise<any> {
+    return this.safeFetch(`/api/jobs/${id}/payment`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentStatus, paymentAmount }),
+    });
+  }
+
+  async bulkUpdatePayment(ids: string[], paymentStatus: string): Promise<any> {
+    return this.safeFetch("/api/jobs/bulk/payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, paymentStatus }),
+    });
+  }
+
+  // ── Backup ────────────────────────────────────────────────
+
+  downloadBackup(): void {
+    window.open("/api/backup/download", "_blank");
+  }
+
+  async restoreBackup(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.safeFetch("/api/backup/restore", {
+      method: "POST",
+      body: formData,
+    });
+  }
 }
 
 export const storageService = new StorageService();

@@ -73,8 +73,6 @@ const PDFJobManager: React.FC = () => {
   const [addJobNotes, setAddJobNotes] = useState("");
   const [addJobUploading, setAddJobUploading] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [rangeFrom, setRangeFrom] = useState(1);
-  const [rangeTo, setRangeTo] = useState(1);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const renderThumbnails = useCallback(async (buf: ArrayBuffer, pageEntries: PageEntry[]) => {
@@ -132,12 +130,30 @@ const PDFJobManager: React.FC = () => {
     }
   }, [pdfBytes, pages, thumbVersion, renderThumbnails]);
 
+  // Auto-load a job from admin dashboard edit action
   useEffect(() => {
-    if (pages.length > 0) {
-      setRangeFrom(1);
-      setRangeTo(pages.length);
-    }
-  }, [pages.length]);
+    const editJobId = sessionStorage.getItem("ps_edit_job");
+    if (!editJobId) return;
+    sessionStorage.removeItem("ps_edit_job");
+    (async () => {
+      try {
+        const res = await fetch("/api/jobs");
+        const jobs = await res.json();
+        const job = Array.isArray(jobs) ? jobs.find((j: any) => j.id === editJobId) : null;
+        if (!job?.serverFileName) return;
+        const fileRes = await fetch(`/api/files/${job.serverFileName}`);
+        if (!fileRes.ok) return;
+        const blob = await fileRes.blob();
+        const f = new File([blob], job.fileName, { type: job.fileType });
+        if (f.type !== "application/pdf") return;
+        setSourceJob(job as PrintJob);
+        const buf = await f.arrayBuffer();
+        await loadPdf(f, buf);
+      } catch (e) {
+        console.error("Failed to load edit job:", e);
+      }
+    })();
+  }, []);
 
   const toggleSelect = (id: string) => {
     setSelectedPages((prev) => {
@@ -428,35 +444,6 @@ const PDFJobManager: React.FC = () => {
                 disabled={selectedPages.size === 0}
                 onClick={() => deletePages([...selectedPages])}>
                 {isRtl ? `✕ حذف (${selectedPages.size})` : `✕ Delete (${selectedPages.size})`}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-none">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-sm font-semibold">{t("splitByRange")}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-3">
-              <div className="flex gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">{t("fromPage")}</Label>
-                  <Input type="number" min={1} max={pages.length} value={rangeFrom}
-                    onChange={(e) => setRangeFrom(Math.max(1, Math.min(+e.target.value || 1, pages.length)))} />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">{t("toPage")}</Label>
-                  <Input type="number" min={1} max={pages.length} value={rangeTo}
-                    onChange={(e) => setRangeTo(Math.max(1, Math.min(+e.target.value || 1, pages.length)))} />
-                </div>
-              </div>
-              <Button variant="secondary" size="sm" className="w-full h-8 text-xs"
-                disabled={rangeFrom > rangeTo || rangeFrom < 1 || rangeTo > pages.length}
-                onClick={() => {
-                  setPages((prev) => prev.slice(rangeFrom - 1, rangeTo));
-                  setSelectedPages(new Set());
-                  setThumbVersion((v) => v + 1);
-                }}>
-                {t("split")}
               </Button>
             </CardContent>
           </Card>

@@ -148,9 +148,13 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB limit
   },
   fileFilter: (req, file, cb) => {
-    // Add file type validation if needed
     cb(null, true);
   },
+});
+
+const uploadMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 /**
@@ -169,9 +173,10 @@ app.get("/api/health", (req, res) => {
 // Get all jobs
 app.get("/api/jobs", (req, res) => {
   const jobs = db.prepare('SELECT * FROM jobs ORDER BY uploadDate DESC').all();
-  // Map SQLite flat columns back to printPreferences object for frontend compatibility
   const formattedJobs = jobs.map(job => ({
     ...job,
+    paymentAmount: job.paymentAmount || 0,
+    paymentStatus: job.paymentStatus || 'UNPAID',
     printPreferences: {
       colorMode: job.colorMode,
       copies: job.copies,
@@ -369,6 +374,96 @@ app.delete("/api/jobs/:id", (req, res) => {
     res.status(200).json({ success: true });
   } else {
     res.status(404).json({ success: false, error: "Job not found" });
+  }
+});
+
+// Bulk delete jobs
+app.post("/api/jobs/bulk/delete", (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, error: "No IDs provided" });
+  }
+  const deleteStmt = db.prepare('SELECT * FROM jobs WHERE id = ?');
+  const runStmt = db.prepare('DELETE FROM jobs WHERE id = ?');
+  const txn = db.transaction((jobIds) => {
+    for (const id of jobIds) {
+      const job = deleteStmt.get(id);
+      if (job) {
+        const filePath = path.join(UPLOADS_DIR, job.serverFileName);
+        try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
+        runStmt.run(id);
+      }
+    }
+  });
+  txn(ids);
+  res.status(200).json({ success: true, deleted: ids.length });
+});
+
+// Bulk status update
+app.post("/api/jobs/bulk/status", (req, res) => {
+  const { ids, status } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, error: "No IDs provided" });
+  }
+  const stmt = db.prepare('UPDATE jobs SET status = ? WHERE id = ?');
+  const txn = db.transaction((jobIds) => {
+    for (const id of jobIds) stmt.run(status, id);
+  });
+  txn(ids);
+  res.status(200).json({ success: true, updated: ids.length });
+});
+
+// Update payment status for a single job
+app.put("/api/jobs/:id/payment", (req, res) => {
+  const { id } = req.params;
+  const { paymentStatus, paymentAmount } = req.body;
+  const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
+  if (!job) return res.status(404).json({ success: false, error: "Job not found" });
+  const paymentDate = paymentStatus === 'PAID' || paymentStatus === 'PARTIAL' ? new Date().toISOString() : null;
+  db.prepare('UPDATE jobs SET paymentStatus = ?, paymentAmount = ?, paymentDate = ? WHERE id = ?').run(paymentStatus, paymentAmount || null, paymentDate, id);
+  res.status(200).json({ success: true });
+});
+
+// Bulk payment update
+app.post("/api/jobs/bulk/payment", (req, res) => {
+  const { ids, paymentStatus } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, error: "No IDs provided" });
+  }
+  const paymentDate = paymentStatus === 'PAID' || paymentStatus === 'PARTIAL' ? new Date().toISOString() : null;
+  const stmt = db.prepare('UPDATE jobs SET paymentStatus = ?, paymentDate = ? WHERE id = ?');
+  const txn = db.transaction((jobIds) => {
+    for (const id of jobIds) stmt.run(paymentStatus, paymentDate, id);
+  });
+  txn(ids);
+  res.status(200).json({ success: true, updated: ids.length });
+});
+
+// Database backup download
+app.get("/api/backup/download", (req, res) => {
+  const dbPath = path.join(__dirname, 'database.sqlite');
+  if (!fs.existsSync(dbPath)) {
+    return res.status(404).json({ success: false, error: "Database not found" });
+  }
+  res.download(dbPath, `printshop-backup-${new Date().toISOString().slice(0, 10)}.sqlite`);
+});
+
+// Database backup restore
+app.post("/api/backup/restore", uploadMemory.single("file"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: "No file uploaded" });
+  }
+  const dbPath = path.join(__dirname, 'database.sqlite');
+  const backupPath = dbPath + '.before_restore';
+  try {
+    if (fs.existsSync(dbPath)) {
+      fs.copyFileSync(dbPath, backupPath);
+    }
+    fs.writeFileSync(dbPath, req.file.buffer);
+    res.status(200).json({ success: true, message: "Database restored. Server restart required." });
+  } catch (e) {
+    try { if (fs.existsSync(backupPath)) fs.copyFileSync(backupPath, dbPath); } catch (e2) {}
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
@@ -800,7 +895,7 @@ import {
   getAuthUrl,
   handleCallback,
 } from './services/gmailService.js';
-import { pollGmail, startPolling, stopPolling, restartPolling, importPendingEmails, discardPendingEmail, getPollStatus } from './services/gmailPolling.js';
+import { pollGmail, importPendingEmails, discardPendingEmail, startPolling, stopPolling, setNewEmailCallback } from './services/gmailPolling.js';
 import { getGmailAccount, disconnectGmail, getGmailClientId, getGmailClientSecret, saveGmailClientId, saveGmailClientSecret, getPendingEmails, restorePendingEmail } from './db.js';
 
 // Get Gmail connection status
@@ -837,23 +932,37 @@ app.get('/api/gmail/callback', async (req, res) => {
   try {
     const { code } = req.query;
     if (!code) {
-      return res.status(400).json({ error: 'Authorization code required' });
+      return res.status(400).send(`<script>alert('Authorization code required');window.close();</script>`);
     }
     const redirectUri = process.env.GMAIL_REDIRECT_URI;
     if (!redirectUri) {
-      return res.status(500).json({ error: 'GMAIL_REDIRECT_URI environment variable not set' });
+      return res.status(500).send(`<script>alert('GMAIL_REDIRECT_URI not set');window.close();</script>`);
     }
     const email = await handleCallback(code, redirectUri);
 
-    // Start polling on successful connection
-    const settings = getSettings();
-    const pollIntervalSec = parseInt(settings.gmailPollInterval) || 60;
-    startPolling(pollIntervalSec * 1000);
+    startPolling(30_000);
 
-    res.json({ success: true, email });
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connected</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0fdf4;color:#166534}
+.card{text-align:center;background:#fff;padding:40px 48px;border-radius:24px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+.icon{width:56px;height:56px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.icon svg{width:28px;height:28px;stroke:#16a34a;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+h2{font-size:20px;margin-bottom:6px}
+p{font-size:14px;color:#6b7280}
+</style></head><body>
+<div class="card">
+<div class="icon"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div>
+<h2>Gmail Connected</h2>
+<p>${email}</p>
+</div>
+<script>
+setTimeout(function(){window.close()},1500);
+<\/script>
+</body></html>`);
   } catch (err) {
     console.error("❌ Error in Gmail callback:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).send(`<script>alert('${err.message}');window.close();</script>`);
   }
 });
 
@@ -878,6 +987,22 @@ app.post('/api/gmail/poll', async (req, res) => {
     console.error("❌ Error polling Gmail:", err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// SSE endpoint — push real-time new-email events to browser
+const sseClients = new Set();
+app.get('/api/gmail/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+  res.write('data: {}\n\n');
+
+  sseClients.add(res);
+  req.on('close', () => {
+    sseClients.delete(res);
+  });
 });
 
 // Poll health status
@@ -1109,13 +1234,21 @@ app.listen(PORT, HOST, () => {
     console.warn('   GMAIL_REDIRECT_URI=http://localhost:3001/api/gmail/callback');
   }
 
-  // Auto-start Gmail polling if an account is connected
-  const gmailAcct = getGmailAccount();
-  if (gmailAcct?.is_active) {
-    console.log('📬 Gmail account connected, starting polling...');
-    const settings = getSettings();
-    const pollIntervalSec = parseInt(settings.gmailPollInterval) || 60;
-    startPolling(pollIntervalSec * 1000);
+  // Auto-poll Gmail every 30s — broadcasts new emails to SSE clients
+  setNewEmailCallback((count) => {
+    for (const client of sseClients) {
+      try {
+        client.write(`data: ${JSON.stringify({ new: count })}\n\n`);
+      } catch (e) {
+        sseClients.delete(client);
+      }
+    }
+  });
+
+  const acct = getGmailAccount();
+  if (acct?.is_active) {
+    console.log('📬 Gmail account connected, starting auto-poll every 30s...');
+    startPolling(30_000);
   }
 });
 

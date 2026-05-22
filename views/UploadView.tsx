@@ -163,9 +163,13 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
     setCancelConfirm({ isOpen: false, jobId: null });
   };
 
+  const isOfficeType = (t: string) => t.includes("word") || t.includes("document") || t.includes("excel") || t.includes("spreadsheet") || t.includes("presentation") || t.includes("powerpoint");
+  const isOfficeFile = (file: File) => isOfficeType(file.type);
+
   // Helper to calculate price with discount for a file
   const getFilePriceWithDiscount = (file: File) => {
     if (!shopSettings) return null;
+    if (isOfficeFile(file)) return null;
 
     const allPaperTypes = shopSettings.paperTypes && shopSettings.paperTypes.length > 0
       ? shopSettings.paperTypes
@@ -815,6 +819,9 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                         {formatSize(fileStatus.file.size)}
                         {(() => {
                           const priceInfo = getFilePriceWithDiscount(fileStatus.file);
+                          if (priceInfo === null && isOfficeFile(fileStatus.file)) {
+                            return <span className="ml-2 text-red-500 text-[10px]">{isRtl ? "لا يمكن حساب الصفحات" : "Can't count pages"}</span>;
+                          }
                           if (!priceInfo) return null;
                           return (
                             <span className="ml-2">
@@ -1071,7 +1078,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                           { numberingSystem: "latn" },
                         )}
                       </p>
-                      {jobPageCounts[job.id] ? (
+                      {jobPageCounts[job.id] && !isOfficeType(job.fileType) ? (
                         <>
                           <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                           <p className="flex items-center gap-1 font-medium bg-gray-100/80 text-gray-500 px-1.5 py-0.5 rounded">

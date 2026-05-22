@@ -4,6 +4,12 @@ export enum PrintStatus {
   PRINTED = "PRINTED",
 }
 
+export enum PaymentStatus {
+  UNPAID = "UNPAID",
+  PAID = "PAID",
+  PARTIAL = "PARTIAL",
+}
+
 export interface PrintJob {
   id: string;
   customerName: string;
@@ -18,6 +24,9 @@ export interface PrintJob {
   fileBlob?: Blob;
   serverFileName?: string;
   source?: string;
+  paymentStatus?: PaymentStatus;
+  paymentAmount?: number;
+  paymentDate?: string;
   printPreferences?: {
     colorMode: "color" | "blackWhite";
     copies: number;

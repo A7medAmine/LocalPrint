@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import CardIDTool from "./CardIDTool";
 import PDFJobManager from "./PDFJobManager";
 import { useLanguage } from "../lib/useLanguage";
@@ -10,6 +10,12 @@ type StudioTab = "cards" | "pdf";
 const PrintStudio: React.FC = () => {
   const { t } = useLanguage();
   const [tab, setTab] = useState<StudioTab>("cards");
+
+  useEffect(() => {
+    if (sessionStorage.getItem("ps_edit_job")) {
+      setTab("pdf");
+    }
+  }, []);
 
   return (
     <div className="space-y-6">
