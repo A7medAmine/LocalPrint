@@ -8,7 +8,106 @@ import os from "os";
 import { PDFDocument } from "pdf-lib";
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 
-import db, { getSettings, updateSetting, getPaperTypes, replaceAllPaperTypes, createPaperType, updatePaperType, deletePaperType, getDiscountRules, getActiveDiscountRules, createDiscountRule, updateDiscountRule, deleteDiscountRule } from './db.js';
+import db, { getSettings, updateSetting, getPaperTypes, replaceAllPaperTypes, createPaperType, updatePaperType, deletePaperType, getDiscountRules, getActiveDiscountRules, createDiscountRule, updateDiscountRule, deleteDiscountRule, reopenDb } from './db.js';
+
+// ── Magic byte signatures for file validation ──
+const MAGIC_BYTES = {
+  "application/pdf": [[0x25, 0x50, 0x44, 0x46]],
+  "image/jpeg": [[0xFF, 0xD8, 0xFF]],
+  "image/png": [[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]],
+  "image/tiff": [[0x49, 0x49, 0x2A, 0x00], [0x4D, 0x4D, 0x00, 0x2A]],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [[0x50, 0x4B, 0x03, 0x04]],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [[0x50, 0x4B, 0x03, 0x04]],
+};
+
+function validateMagicBytes(filePath, mimeType) {
+  const signatures = MAGIC_BYTES[mimeType];
+  if (!signatures) return true; // unknown type, skip check
+  const buf = Buffer.alloc(16);
+  const fd = fs.openSync(filePath, "r");
+  fs.readSync(fd, buf, 0, 16, 0);
+  fs.closeSync(fd);
+  return signatures.some(sig =>
+    sig.every((byte, i) => buf[i] === byte)
+  );
+}
+
+// ── Auth token management (persisted in DB) ──
+function loadTokens() {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = '_admin_tokens'").get();
+    return row ? new Set(JSON.parse(row.value)) : new Set();
+  } catch { return new Set(); }
+}
+
+function saveTokens(tokens) {
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('_admin_tokens', ?)").run(JSON.stringify([...tokens]));
+}
+
+const adminTokens = loadTokens();
+
+function generateToken() {
+  const token = randomBytes(32).toString("hex");
+  adminTokens.add(token);
+  saveTokens(adminTokens);
+  return token;
+}
+
+function isValidAdminToken(req) {
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith("Bearer ") && adminTokens.has(auth.slice(7))) return true;
+  const queryToken = req.query?.token;
+  if (queryToken && adminTokens.has(queryToken)) return true;
+  return false;
+}
+
+// Middleware: require valid admin token
+function requireAdmin(req, res, next) {
+  if (!isValidAdminToken(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
+// ── Rate limiter (in-memory, per-IP) ──
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 5;         // 5 attempts per window
+
+function rateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || "unknown";
+  const now = Date.now();
+  if (!rateLimitMap.has(ip)) {
+    rateLimitMap.set(ip, []);
+  }
+  const timestamps = rateLimitMap.get(ip).filter(t => now - t < RATE_LIMIT_WINDOW);
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "Too many requests. Try again later." });
+  }
+  timestamps.push(now);
+  rateLimitMap.set(ip, timestamps);
+  next();
+}
+
+// Clean up stale rate-limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, timestamps] of rateLimitMap) {
+    const fresh = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW);
+    if (fresh.length === 0) rateLimitMap.delete(ip);
+    else rateLimitMap.set(ip, fresh);
+  }
+}, 300_000);
+
+// ── Allowed MIME types for upload ──
+const ALLOWED_MIMES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/tiff",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,13 +135,21 @@ if (isDev) {
       "Access-Control-Allow-Methods",
       "GET, POST, PUT, DELETE, OPTIONS",
     );
-    res.header("Access-Control-Allow-Headers", "Content-Type");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }
     next();
   });
 }
+
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Content-Security-Policy", "script-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';");
+  next();
+});
 
 // Ensure directories exist
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -124,7 +231,7 @@ const backfillPageCounts = async () => {
       }
     } else {
       console.warn(
-        `  ⚠️  File not found for job ${job.id}: ${job.serverFileName}`,
+        `  ⚠️  File not found for job ${job.id}`,
       );
     }
   }
@@ -137,8 +244,8 @@ backfillPageCounts().catch((err) => console.error("❌ Backfill error:", err));
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    const randomName = randomBytes(16).toString("hex");
+    cb(null, randomName + path.extname(file.originalname));
   },
 });
 
@@ -148,7 +255,11 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB limit
   },
   fileFilter: (req, file, cb) => {
-    cb(null, true);
+    if (ALLOWED_MIMES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} is not allowed. Allowed: PDF, DOCX, XLSX, JPEG, PNG, TIFF`));
+    }
   },
 });
 
@@ -160,6 +271,11 @@ const uploadMemory = multer({
 /**
  * API ROUTES
  */
+
+// Favicon — inline SVG to avoid 404
+app.get("/favicon.ico", (req, res) => {
+  res.type("image/svg+xml").send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="8" fill="#2563eb"/><text x="32" y="44" font-size="36" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="bold">P</text></svg>`);
+});
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
@@ -197,6 +313,12 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 
     const metadata = JSON.parse(req.body.metadata);
     const filePath = path.join(UPLOADS_DIR, req.file.filename);
+
+    // Validate magic bytes match the claimed MIME type
+    if (!validateMagicBytes(filePath, req.file.mimetype)) {
+      fs.unlinkSync(filePath);
+      return res.status(400).json({ success: false, error: "File content does not match its type" });
+    }
 
     // Get page count for PDF files
     let pageCount = null;
@@ -238,6 +360,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       newJob.printPreferences?.paperType || 'normal'
     );
 
+    broadcastEvent("new-job", { id: newJob.id });
     res.status(200).json({ success: true, job: newJob });
   } catch (err) {
     console.error("❌ Upload Error:", err);
@@ -246,7 +369,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 });
 
 // Update job file
-app.post("/api/jobs/:id/file", upload.single("file"), async (req, res) => {
+app.post("/api/jobs/:id/file", requireAdmin, upload.single("file"), async (req, res) => {
   try {
     const jobId = req.params.id;
     const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
@@ -260,6 +383,13 @@ app.post("/api/jobs/:id/file", upload.single("file"), async (req, res) => {
         .json({ success: false, error: "No file uploaded" });
     }
 
+    // Validate magic bytes match the claimed MIME type
+    const newFilePath = path.join(UPLOADS_DIR, req.file.filename);
+    if (!validateMagicBytes(newFilePath, req.file.mimetype)) {
+      fs.unlinkSync(newFilePath);
+      return res.status(400).json({ success: false, error: "File content does not match its type" });
+    }
+
     // Delete old file
     if (job.serverFileName) {
       const oldPath = path.join(UPLOADS_DIR, job.serverFileName);
@@ -267,7 +397,7 @@ app.post("/api/jobs/:id/file", upload.single("file"), async (req, res) => {
         try {
           fs.unlinkSync(oldPath);
         } catch (e) {
-          console.warn("⚠️  Could not delete old file:", oldPath);
+          console.warn("⚠️  Could not delete old file");
         }
       }
     }
@@ -296,7 +426,7 @@ app.post("/api/jobs/:id/file", upload.single("file"), async (req, res) => {
 });
 
 // Update job status
-app.put("/api/jobs/:id/status", (req, res) => {
+app.put("/api/jobs/:id/status", requireAdmin, (req, res) => {
   const { status } = req.body;
   const jobId = req.params.id;
   
@@ -311,7 +441,7 @@ app.put("/api/jobs/:id/status", (req, res) => {
 });
 
 // Update job print preferences (colorMode, copies)
-app.put("/api/jobs/:id/preferences", (req, res) => {
+app.put("/api/jobs/:id/preferences", requireAdmin, (req, res) => {
   const jobId = req.params.id;
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
   
@@ -354,7 +484,7 @@ app.put("/api/jobs/:id/preferences", (req, res) => {
 });
 
 // Delete job
-app.delete("/api/jobs/:id", (req, res) => {
+app.delete("/api/jobs/:id", requireAdmin, (req, res) => {
   const jobId = req.params.id;
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
 
@@ -367,7 +497,7 @@ app.delete("/api/jobs/:id", (req, res) => {
         fs.unlinkSync(filePath);
       }
     } catch (e) {
-      console.warn("⚠️  Could not delete physical file:", filePath);
+      console.warn("⚠️  Could not delete physical file");
     }
 
     db.prepare('DELETE FROM jobs WHERE id = ?').run(jobId);
@@ -378,7 +508,7 @@ app.delete("/api/jobs/:id", (req, res) => {
 });
 
 // Bulk delete jobs
-app.post("/api/jobs/bulk/delete", (req, res) => {
+app.post("/api/jobs/bulk/delete", requireAdmin, (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ success: false, error: "No IDs provided" });
@@ -400,7 +530,7 @@ app.post("/api/jobs/bulk/delete", (req, res) => {
 });
 
 // Bulk status update
-app.post("/api/jobs/bulk/status", (req, res) => {
+app.post("/api/jobs/bulk/status", requireAdmin, (req, res) => {
   const { ids, status } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ success: false, error: "No IDs provided" });
@@ -414,7 +544,7 @@ app.post("/api/jobs/bulk/status", (req, res) => {
 });
 
 // Update payment status for a single job
-app.put("/api/jobs/:id/payment", (req, res) => {
+app.put("/api/jobs/:id/payment", requireAdmin, (req, res) => {
   const { id } = req.params;
   const { paymentStatus, paymentAmount } = req.body;
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
@@ -425,7 +555,7 @@ app.put("/api/jobs/:id/payment", (req, res) => {
 });
 
 // Bulk payment update
-app.post("/api/jobs/bulk/payment", (req, res) => {
+app.post("/api/jobs/bulk/payment", requireAdmin, (req, res) => {
   const { ids, paymentStatus } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ success: false, error: "No IDs provided" });
@@ -440,7 +570,7 @@ app.post("/api/jobs/bulk/payment", (req, res) => {
 });
 
 // Database backup download
-app.get("/api/backup/download", (req, res) => {
+app.get("/api/backup/download", requireAdmin, (req, res) => {
   const dbPath = path.join(__dirname, 'database.sqlite');
   if (!fs.existsSync(dbPath)) {
     return res.status(404).json({ success: false, error: "Database not found" });
@@ -449,27 +579,36 @@ app.get("/api/backup/download", (req, res) => {
 });
 
 // Database backup restore
-app.post("/api/backup/restore", uploadMemory.single("file"), (req, res) => {
+app.post("/api/backup/restore", requireAdmin, uploadMemory.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: "No file uploaded" });
   }
-  const dbPath = path.join(__dirname, 'database.sqlite');
-  const backupPath = dbPath + '.before_restore';
+  const _dbPath = path.join(__dirname, 'database.sqlite');
+  const _backupPath = _dbPath + '.before_restore';
+  // Close the current connection before writing
+  try { db.close(); } catch (e) {}
   try {
-    if (fs.existsSync(dbPath)) {
-      fs.copyFileSync(dbPath, backupPath);
+    if (fs.existsSync(_dbPath)) {
+      fs.copyFileSync(_dbPath, _backupPath);
     }
-    fs.writeFileSync(dbPath, req.file.buffer);
-    res.status(200).json({ success: true, message: "Database restored. Server restart required." });
+    fs.writeFileSync(_dbPath, req.file.buffer);
+    reopenDb();
+    res.status(200).json({ success: true });
   } catch (e) {
-    try { if (fs.existsSync(backupPath)) fs.copyFileSync(backupPath, dbPath); } catch (e2) {}
+    try { if (fs.existsSync(_backupPath)) fs.copyFileSync(_backupPath, _dbPath); } catch (e2) {}
+    try { reopenDb(); } catch (e2) {}
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// Download/view file — serve from uploads/ directory (full path in /api/files/:segments*)
+// Download/view file — serve from uploads/ directory only (path traversal protected)
 app.get(/^\/api\/files\/(.+)/, (req, res) => {
-  const filePath = path.join(UPLOADS_DIR, req.params[0]);
+  const requested = path.normalize(req.params[0]).replace(/^(\.\.(\/|\\|$))+/, "");
+  const filePath = path.resolve(path.join(UPLOADS_DIR, requested));
+
+  if (!filePath.startsWith(path.resolve(UPLOADS_DIR))) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
 
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);
@@ -486,7 +625,7 @@ app.get("/api/settings", (req, res) => {
 });
 
 // Update settings (shop info only; paper types use dedicated endpoints)
-app.post("/api/settings", (req, res) => {
+app.post("/api/settings", requireAdmin, (req, res) => {
   try {
     if (req.body.shopName !== undefined) {
       updateSetting('shopName', req.body.shopName);
@@ -532,7 +671,7 @@ app.post("/api/settings", (req, res) => {
 });
 
 // Upload logo
-app.post("/api/settings/logo", upload.single("logo"), (req, res) => {
+app.post("/api/settings/logo", requireAdmin, upload.single("logo"), (req, res) => {
   try {
     if (!req.file) {
       return res
@@ -588,8 +727,8 @@ function verifyHash(password, stored) {
 const DEFAULT_PASSWORD = "admin123";
 const DEFAULT_HASH = hashPassword(DEFAULT_PASSWORD);
 
-// Verify admin password
-app.post("/api/auth/verify", (req, res) => {
+// Verify admin password — returns a session token on success
+app.post("/api/auth/verify", rateLimit, (req, res) => {
   const { password } = req.body;
   const settings = getSettings();
   let stored = settings.adminPassword;
@@ -599,20 +738,37 @@ app.post("/api/auth/verify", (req, res) => {
     updateSetting("adminPassword", stored);
   }
 
+  let ok = false;
   if (!stored.includes(":")) {
-    const ok = password === stored;
+    ok = password === stored;
     if (ok) {
       const hashed = hashPassword(password);
       updateSetting("adminPassword", hashed);
     }
-    return res.status(200).json({ success: ok });
+  } else {
+    ok = verifyHash(password, stored);
   }
 
-  res.status(200).json({ success: verifyHash(password, stored) });
+  if (ok) {
+    const token = generateToken();
+    res.status(200).json({ success: true, token });
+  } else {
+    res.status(200).json({ success: false });
+  }
+});
+
+// Logout — invalidate token
+app.post("/api/auth/logout", (req, res) => {
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith("Bearer ")) {
+    adminTokens.delete(auth.slice(7));
+    saveTokens(adminTokens);
+  }
+  res.status(200).json({ success: true });
 });
 
 // Change admin password
-app.post("/api/settings/password", (req, res) => {
+app.post("/api/settings/password", requireAdmin, (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const settings = getSettings();
@@ -672,8 +828,6 @@ app.get("/api/local-ip", (req, res) => {
       }
     }
 
-    console.log("🔍 Available network interfaces:", ips);
-
     let selectedIP = null;
 
     // Priority 1: Prefer IPs with common gateway patterns (.1.90, .1.100, .0.1, .1.1)
@@ -682,7 +836,6 @@ app.get("/api/local-ip", (req, res) => {
       const patternIP = ips.find((ip) => ip.address.endsWith(pattern));
       if (patternIP) {
         selectedIP = patternIP.address;
-        console.log("✅ Selected common pattern IP:", selectedIP);
         break;
       }
     }
@@ -694,7 +847,6 @@ app.get("/api/local-ip", (req, res) => {
       );
       if (wifiIP) {
         selectedIP = wifiIP.address;
-        console.log("✅ Selected WiFi IP:", selectedIP);
       }
     }
 
@@ -705,7 +857,6 @@ app.get("/api/local-ip", (req, res) => {
       );
       if (ethernetIP) {
         selectedIP = ethernetIP.address;
-        console.log("✅ Selected Ethernet IP:", selectedIP);
       }
     }
 
@@ -714,23 +865,20 @@ app.get("/api/local-ip", (req, res) => {
       const lanIP = ips.find((ip) => ip.address.startsWith("192.168."));
       if (lanIP) {
         selectedIP = lanIP.address;
-        console.log("✅ Selected first LAN IP:", selectedIP);
       }
     }
 
     // Priority 5: Any non-internal IP
     if (!selectedIP && ips.length > 0) {
       selectedIP = ips[0].address;
-      console.log("✅ Selected first available IP:", selectedIP);
     }
 
     // Fallback to localhost
     if (!selectedIP) {
       selectedIP = "localhost";
-      console.log("⚠️  Fallback to localhost");
     }
 
-    console.log("🌐 Final selected IP:", selectedIP);
+    console.log("🌐 Local IP detected");
     res.status(200).json({ ip: selectedIP });
   } catch (err) {
     console.error("❌ Error getting local IP:", err);
@@ -765,7 +913,7 @@ app.get("/api/discount-rules/active", (req, res) => {
 });
 
 // Create new discount rule
-app.post("/api/discount-rules", (req, res) => {
+app.post("/api/discount-rules", requireAdmin, (req, res) => {
   try {
     const { id, name, discount_type, discount_value, condition_type, threshold, max_discount_cap, priority, is_active } = req.body;
 
@@ -793,7 +941,7 @@ app.post("/api/discount-rules", (req, res) => {
 });
 
 // Update discount rule
-app.put("/api/discount-rules/:id", (req, res) => {
+app.put("/api/discount-rules/:id", requireAdmin, (req, res) => {
   try {
     const ruleId = req.params.id;
     const updates = req.body;
@@ -825,7 +973,7 @@ app.put("/api/discount-rules/:id", (req, res) => {
 });
 
 // Delete discount rule
-app.delete("/api/discount-rules/:id", (req, res) => {
+app.delete("/api/discount-rules/:id", requireAdmin, (req, res) => {
   try {
     const ruleId = req.params.id;
     deleteDiscountRule(ruleId);
@@ -851,7 +999,7 @@ app.get("/api/paper-types", (req, res) => {
 });
 
 // Create paper type
-app.post("/api/paper-types", (req, res) => {
+app.post("/api/paper-types", requireAdmin, (req, res) => {
   try {
     const { id, name, nameAr, colorPerPage, blackWhitePerPage } = req.body;
     if (!id || !name) {
@@ -866,7 +1014,7 @@ app.post("/api/paper-types", (req, res) => {
 });
 
 // Update paper type
-app.put("/api/paper-types/:id", (req, res) => {
+app.put("/api/paper-types/:id", requireAdmin, (req, res) => {
   try {
     const pt = updatePaperType(req.params.id, req.body);
     if (!pt) return res.status(404).json({ error: "Paper type not found" });
@@ -878,7 +1026,7 @@ app.put("/api/paper-types/:id", (req, res) => {
 });
 
 // Delete paper type
-app.delete("/api/paper-types/:id", (req, res) => {
+app.delete("/api/paper-types/:id", requireAdmin, (req, res) => {
   try {
     deletePaperType(req.params.id);
     res.status(200).json({ success: true });
@@ -899,7 +1047,7 @@ import { pollGmail, importPendingEmails, discardPendingEmail, startPolling, stop
 import { getGmailAccount, disconnectGmail, getGmailClientId, getGmailClientSecret, saveGmailClientId, saveGmailClientSecret, getPendingEmails, restorePendingEmail } from './db.js';
 
 // Get Gmail connection status
-app.get('/api/gmail/status', (req, res) => {
+app.get('/api/gmail/status', requireAdmin, (req, res) => {
   try {
     const account = getGmailAccount();
     res.json({
@@ -913,7 +1061,7 @@ app.get('/api/gmail/status', (req, res) => {
 });
 
 // Start OAuth flow
-app.get('/api/gmail/auth', (req, res) => {
+app.get('/api/gmail/auth', requireAdmin, (req, res) => {
   try {
     const redirectUri = process.env.GMAIL_REDIRECT_URI;
     if (!redirectUri) {
@@ -927,21 +1075,26 @@ app.get('/api/gmail/auth', (req, res) => {
   }
 });
 
+function escapeHtml(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
 // OAuth callback
 app.get('/api/gmail/callback', async (req, res) => {
   try {
     const { code } = req.query;
     if (!code) {
-      return res.status(400).send(`<script>alert('Authorization code required');window.close();</script>`);
+      return res.status(400).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title></head><body><script>alert('Authorization code required');window.close();<\/script></body></html>`);
     }
     const redirectUri = process.env.GMAIL_REDIRECT_URI;
     if (!redirectUri) {
-      return res.status(500).send(`<script>alert('GMAIL_REDIRECT_URI not set');window.close();</script>`);
+      return res.status(500).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title></head><body><script>alert('GMAIL_REDIRECT_URI not set');window.close();<\/script></body></html>`);
     }
     const email = await handleCallback(code, redirectUri);
 
     startPolling(30_000);
 
+    const safeEmail = escapeHtml(email);
     res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connected</title><style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0fdf4;color:#166534}
@@ -954,7 +1107,7 @@ p{font-size:14px;color:#6b7280}
 <div class="card">
 <div class="icon"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div>
 <h2>Gmail Connected</h2>
-<p>${email}</p>
+<p>${safeEmail}</p>
 </div>
 <script>
 setTimeout(function(){window.close()},1500);
@@ -962,12 +1115,13 @@ setTimeout(function(){window.close()},1500);
 </body></html>`);
   } catch (err) {
     console.error("❌ Error in Gmail callback:", err);
-    res.status(500).send(`<script>alert('${err.message}');window.close();</script>`);
+    const safeMsg = escapeHtml(err.message);
+    res.status(500).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title></head><body><script>alert('${safeMsg.replace(/'/g, "\\'")}');window.close();<\/script></body></html>`);
   }
 });
 
 // Disconnect Gmail
-app.post('/api/gmail/disconnect', (req, res) => {
+app.post('/api/gmail/disconnect', requireAdmin, (req, res) => {
   try {
     stopPolling();
     disconnectGmail();
@@ -979,7 +1133,7 @@ app.post('/api/gmail/disconnect', (req, res) => {
 });
 
 // Manual poll trigger
-app.post('/api/gmail/poll', async (req, res) => {
+app.post('/api/gmail/poll', requireAdmin, async (req, res) => {
   try {
     const result = await pollGmail();
     res.json(result);
@@ -989,9 +1143,24 @@ app.post('/api/gmail/poll', async (req, res) => {
   }
 });
 
-// SSE endpoint — push real-time new-email events to browser
+// ── General SSE event bus ──
+const SSE_MAX_CLIENTS = 50;
 const sseClients = new Set();
-app.get('/api/gmail/events', (req, res) => {
+
+function broadcastEvent(event, data) {
+  for (const client of sseClients) {
+    try {
+      client.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
+}
+
+app.get('/api/events', (req, res) => {
+  if (sseClients.size >= SSE_MAX_CLIENTS) {
+    return res.status(503).end();
+  }
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -1006,7 +1175,7 @@ app.get('/api/gmail/events', (req, res) => {
 });
 
 // Poll health status
-app.get('/api/gmail/poll-status', (req, res) => {
+app.get('/api/gmail/poll-status', requireAdmin, (req, res) => {
   try {
     res.json(getPollStatus());
   } catch (err) {
@@ -1015,7 +1184,7 @@ app.get('/api/gmail/poll-status', (req, res) => {
 });
 
 // List pending emails (awaiting user review)
-app.get('/api/gmail/pending', (req, res) => {
+app.get('/api/gmail/pending', requireAdmin, (req, res) => {
   try {
     const pending = getPendingEmails().map(p => ({
       ...p,
@@ -1029,7 +1198,7 @@ app.get('/api/gmail/pending', (req, res) => {
 });
 
 // Import selected pending emails → create print jobs
-app.post('/api/gmail/import', async (req, res) => {
+app.post('/api/gmail/import', requireAdmin, async (req, res) => {
   try {
     const { ids, overrides } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -1044,7 +1213,7 @@ app.post('/api/gmail/import', async (req, res) => {
 });
 
 // Discard a pending email (soft-delete)
-app.delete('/api/gmail/pending/:id', (req, res) => {
+app.delete('/api/gmail/pending/:id', requireAdmin, (req, res) => {
   try {
     discardPendingEmail(parseInt(req.params.id));
     res.json({ success: true });
@@ -1055,7 +1224,7 @@ app.delete('/api/gmail/pending/:id', (req, res) => {
 });
 
 // Restore a discarded pending email
-app.post('/api/gmail/pending/:id/restore', (req, res) => {
+app.post('/api/gmail/pending/:id/restore', requireAdmin, (req, res) => {
   try {
     restorePendingEmail(parseInt(req.params.id));
     res.json({ success: true });
@@ -1135,7 +1304,7 @@ app.get('/api/gmail/attachment/:pendingId/:attachmentIndex', async (req, res) =>
 });
 
 // Get Gmail settings (client ID/secret)
-app.get('/api/gmail/settings', (req, res) => {
+app.get('/api/gmail/settings', requireAdmin, (req, res) => {
   try {
     const settings = getSettings();
     res.json({
@@ -1152,7 +1321,7 @@ app.get('/api/gmail/settings', (req, res) => {
 });
 
 // Save Gmail settings
-app.post('/api/gmail/settings', async (req, res) => {
+app.post('/api/gmail/settings', requireAdmin, async (req, res) => {
   try {
     const { clientId, clientSecret } = req.body;
     if (clientId) saveGmailClientId(clientId);
@@ -1210,7 +1379,7 @@ if (!isDev) {
 /**
  * SERVER STARTUP
  */
-const HOST = process.env.HOST || "0.0.0.0";
+const HOST = process.env.HOST || "127.0.0.1";
 
 app.listen(PORT, HOST, () => {
   console.log("\n🚀 Server started successfully!");
@@ -1224,8 +1393,8 @@ app.listen(PORT, HOST, () => {
     console.log(`📁 Serving static files from: ${DIST_DIR}`);
   }
 
-  console.log(`📂 Uploads directory: ${UPLOADS_DIR}`);
-  console.log(`💾 SQLite database: ${path.join(__dirname, 'database.sqlite')}\n`);
+  console.log(`📂 Uploads directory: ${UPLOADS_DIR.replace(__dirname, '.')}`);
+  console.log(`💾 SQLite database: database.sqlite\n`);
 
   const gmailRedirectUri = process.env.GMAIL_REDIRECT_URI;
   if (!gmailRedirectUri) {
@@ -1236,13 +1405,7 @@ app.listen(PORT, HOST, () => {
 
   // Auto-poll Gmail every 30s — broadcasts new emails to SSE clients
   setNewEmailCallback((count) => {
-    for (const client of sseClients) {
-      try {
-        client.write(`data: ${JSON.stringify({ new: count })}\n\n`);
-      } catch (e) {
-        sseClients.delete(client);
-      }
-    }
+    broadcastEvent("gmail-new", { new: count });
   });
 
   const acct = getGmailAccount();

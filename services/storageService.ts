@@ -1,21 +1,48 @@
 import { PrintJob, PrintStatus, ShopSettings, DiscountRule } from "../types";
 
 class StorageService {
+  private authToken: string | null = null;
+
+  setAuthToken(token: string | null) {
+    this.authToken = token;
+  }
+
+  getAuthToken(): string | null {
+    return this.authToken || localStorage.getItem("ps_admin_token");
+  }
+
   private async safeFetch(url: string, options?: RequestInit) {
     try {
+      const token = this.authToken || localStorage.getItem("ps_admin_token");
+      if (token && !this.authToken) this.authToken = token;
+
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const response = await fetch(url, {
         ...options,
         headers: {
-          Accept: "application/json",
-          ...(options?.headers || {}),
+          ...headers,
+          ...(options?.headers as Record<string, string> || {}),
         },
       });
 
       const text = await response.text();
 
+      if (response.status === 401) {
+        localStorage.removeItem("ps_admin_token");
+        this.authToken = null;
+        window.dispatchEvent(new CustomEvent("session-expired"));
+        throw new Error("Session expired");
+      }
+
       if (!response.ok) {
-        console.error(`Server error (${response.status}):`, text);
-        throw new Error(`Server error: ${response.status}`);
+        let msg = `Server error: ${response.status}`;
+        try { const errBody = JSON.parse(text); if (errBody.error) msg = errBody.error; } catch {}
+        throw new Error(msg);
       }
 
       if (!text) return {};
@@ -45,6 +72,9 @@ class StorageService {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/upload", true);
       xhr.setRequestHeader("Accept", "application/json");
+      if (this.authToken) {
+        xhr.setRequestHeader("Authorization", `Bearer ${this.authToken}`);
+      }
 
       if (onProgress) {
         xhr.upload.onprogress = (e) => {
@@ -262,16 +292,16 @@ class StorageService {
     });
   }
 
-  async verifyPassword(password: string): Promise<boolean> {
+  async verifyPassword(password: string): Promise<{ success: boolean; token?: string }> {
     try {
       const result = await this.safeFetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      return result.success === true;
+      return result;
     } catch {
-      return false;
+      return { success: false };
     }
   }
 
@@ -392,8 +422,21 @@ class StorageService {
 
   // ── Backup ────────────────────────────────────────────────
 
-  downloadBackup(): void {
-    window.open("/api/backup/download", "_blank");
+  async downloadBackup(): Promise<void> {
+    const token = this.authToken || localStorage.getItem("ps_admin_token");
+    const res = await fetch("/api/backup/download", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `printshop-backup-${new Date().toISOString().slice(0, 10)}.sqlite`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   async restoreBackup(file: File): Promise<any> {

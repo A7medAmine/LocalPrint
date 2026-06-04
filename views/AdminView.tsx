@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import PreviewModal from "../components/preview/PreviewModal";
 
 interface AdminViewProps {
   lang: Language;
@@ -455,9 +456,10 @@ const AdminView: React.FC<AdminViewProps> = ({
     loadGmailStatus();
     loadGmailPending();
 
-    // SSE listener — silently refresh pending table when server pushes new-email events
-    const es = new EventSource('/api/gmail/events');
-    es.onmessage = () => { loadGmailPending(); };
+    // SSE listener — real-time updates
+    const es = new EventSource('/api/events');
+    es.addEventListener("gmail-new", () => { loadGmailPending(); });
+    es.addEventListener("new-job", () => { loadJobs(); });
     es.onerror = () => {};
     return () => { es.close(); };
   }, []);
@@ -908,9 +910,10 @@ const AdminView: React.FC<AdminViewProps> = ({
     setRestoring(true);
     try {
       const result = await storageService.restoreBackup(restoreFile);
-      toast({ title: isRtl ? "تمت الاستعادة. يرجى إعادة تشغيل الخادم." : "Restored. Please restart the server.", variant: "success" });
+      toast({ title: isRtl ? "تمت الاستعادة. إعادة تحميل..." : "Restored. Reloading...", variant: "success" });
       setBackupRestoreOpen(false);
       setRestoreFile(null);
+      setTimeout(() => window.location.reload(), 1500);
     } catch (err: any) {
       toast({ title: isRtl ? "فشل الاستعادة" : "Restore failed", description: err.message, variant: "destructive" });
     } finally {
@@ -1308,8 +1311,36 @@ const AdminView: React.FC<AdminViewProps> = ({
               return (
             <>
             {loading ? (
-              <div className="p-12 text-center text-gray-500">
-                Loading from server...
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="bg-white rounded-2xl shadow-md shadow-indigo-100/40 border border-white overflow-hidden animate-pulse">
+                    <div className="flex items-center px-4 py-3 gap-3">
+                      <div className="w-4 h-4 rounded bg-gray-200 shrink-0" />
+                      <div className="w-8 h-8 rounded-full bg-gray-200 shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <div className="h-3.5 w-36 rounded-full bg-gray-200" />
+                        <div className="h-3 w-24 rounded-full bg-gray-100" />
+                      </div>
+                      <div className="h-5 w-16 rounded-full bg-gray-200" />
+                      <div className="h-5 w-5 rounded bg-gray-200" />
+                    </div>
+                    <div className="border-t border-gray-50 px-4 py-2 space-y-2">
+                      {[1, 2].map((j) => (
+                        <div key={j} className="flex items-center gap-3 py-1.5">
+                          <div className="w-4 h-4 rounded bg-gray-200 shrink-0" />
+                          <div className="w-6 h-6 rounded bg-gray-200 shrink-0" />
+                          <div className="flex-1 space-y-1">
+                            <div className="h-3 w-44 rounded-full bg-gray-200" />
+                            <div className="h-2.5 w-28 rounded-full bg-gray-100" />
+                          </div>
+                          <div className="h-5 w-12 rounded-full bg-gray-200" />
+                          <div className="h-5 w-5 rounded bg-gray-200" />
+                          <div className="h-5 w-5 rounded bg-gray-200" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : groups.length === 0 ? (
               <div className="p-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-200">
@@ -2837,42 +2868,14 @@ const AdminView: React.FC<AdminViewProps> = ({
     </DialogContent>
 </Dialog>
 
-      {/* File Preview Dialog */}
-      <Dialog open={previewJob !== null} onOpenChange={(open) => { if (!open) { setPreviewJob(null); setPreviewUrl(null); } }}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-              {previewJob?.fileName || ""}
-            </DialogTitle>
-            <DialogDescription>
-              {previewJob && (
-                <span className="text-xs text-gray-400">
-                  {formatSize(previewJob.fileSize)} &middot; {previewJob.fileType}
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center justify-center bg-gray-50 rounded-xl p-2 min-h-[300px]">
-            {previewUrl && previewJob?.fileType === "application/pdf" && (
-              <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg" title="PDF Preview" />
-            )}
-            {previewUrl && previewJob?.fileType?.startsWith("image/") && (
-              <img src={previewUrl} alt={previewJob.fileName} className="max-w-full max-h-[70vh] object-contain rounded-lg" />
-            )}
-            {previewUrl && previewJob && !previewJob.fileType?.startsWith("image/") && previewJob.fileType !== "application/pdf" && (
-              <div className="text-center text-gray-400 py-12">
-                <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                <p className="text-sm font-medium">{isRtl ? "لا يمكن معاينة هذا النوع من الملفات" : "Preview not available for this file type"}</p>
-                <Button variant="outline" size="sm" className="mt-4" onClick={() => { if (previewUrl) { const a = document.createElement("a"); a.href = previewUrl; a.download = previewJob.fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); } }}>
-                  <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                  {isRtl ? "تحميل الملف" : "Download File"}
-                </Button>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PreviewModal
+        open={previewJob !== null}
+        onClose={() => { setPreviewJob(null); setPreviewUrl(null); }}
+        url={previewUrl}
+        fileName={previewJob?.fileName ?? ""}
+        fileType={previewJob?.fileType}
+        fileSize={previewJob?.fileSize}
+      />
 
     </div>
   );

@@ -155,4 +155,5 @@ export const ALLOWED_TYPES = [
   "application/vnd.ms-powerpoint",
   "image/jpeg",
   "image/png",
+  "image/tiff",
 ];

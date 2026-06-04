@@ -137,7 +137,10 @@ const PDFJobManager: React.FC = () => {
     sessionStorage.removeItem("ps_edit_job");
     (async () => {
       try {
-        const res = await fetch("/api/jobs");
+        const token = localStorage.getItem("ps_admin_token");
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch("/api/jobs", { headers });
         const jobs = await res.json();
         const job = Array.isArray(jobs) ? jobs.find((j: any) => j.id === editJobId) : null;
         if (!job?.serverFileName) return;
@@ -448,49 +451,7 @@ const PDFJobManager: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="shadow-none">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-sm font-semibold">{t("printOptions")}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t("copies")}</Label>
-                <Input type="number" min={1} max={999} value={copies}
-                  onChange={(e) => setCopies(Math.max(1, +e.target.value))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t("colorMode")}</Label>
-                <Select value={colorMode} onValueChange={(v) => setColorMode(v as "color" | "bw")}>
-                  <SelectTrigger className="h-10 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="color">{t("color")}</SelectItem>
-                    <SelectItem value="bw">{t("bw")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t("paperSize")}</Label>
-                <Select value={paperSize} onValueChange={setPaperSize}>
-                  <SelectTrigger className="h-10 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAPER_SIZES.map((ps) => (
-                      <SelectItem key={ps.value} value={ps.value}>{ps.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="duplex" checked={duplex}
-                  onChange={(e) => setDuplex(e.target.checked)}
-                  className="rounded border-input h-4 w-4 accent-primary" />
-                <Label htmlFor="duplex" className="text-sm font-medium cursor-pointer">{t("duplex")}</Label>
-              </div>
-            </CardContent>
-          </Card>
+
 
           <Card className="shadow-none">
             <CardHeader className="p-4 pb-2">
@@ -622,6 +583,7 @@ const PDFJobManager: React.FC = () => {
         isOpen={showJobLoader}
         onClose={() => setShowJobLoader(false)}
         onSelect={(job, f) => { if (f) handleLoadFromJob(job, f); }}
+        filterType="pdf"
       />
 
       <Dialog open={showNewJobDialog} onOpenChange={setShowNewJobDialog}>

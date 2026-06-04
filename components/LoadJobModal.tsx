@@ -6,7 +6,7 @@ interface LoadJobModalProps {
   onClose: () => void;
   onSelect: (job: PrintJob, file: File) => void;
   acceptType?: string;
-  filterType?: "image" | "all";
+  filterType?: "image" | "pdf" | "all";
 }
 
 const LoadJobModal: React.FC<LoadJobModalProps> = ({ isOpen, onClose, onSelect, acceptType, filterType = "all" }) => {
@@ -21,11 +21,16 @@ const LoadJobModal: React.FC<LoadJobModalProps> = ({ isOpen, onClose, onSelect, 
       setLoading(true);
       setError("");
       try {
-        const res = await fetch("/api/jobs");
+        const token = localStorage.getItem("ps_admin_token");
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch("/api/jobs", { headers });
         const data = await res.json();
         let list = Array.isArray(data) ? data.filter((j: any) => j.serverFileName) : [];
         if (filterType === "image") {
           list = list.filter((j: any) => j.fileType?.startsWith("image/"));
+        } else if (filterType === "pdf") {
+          list = list.filter((j: any) => j.fileType === "application/pdf");
         }
         setJobs(list);
       } catch {

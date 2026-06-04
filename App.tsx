@@ -14,7 +14,9 @@ const App: React.FC = () => {
   });
 
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    return localStorage.getItem("ps_is_admin") === "true";
+    const token = localStorage.getItem("ps_admin_token");
+    if (token) storageService.setAuthToken(token);
+    return !!token;
   });
 
   const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -33,6 +35,19 @@ const App: React.FC = () => {
     const handleHashChange = () => setCurrentHash(window.location.hash);
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      storageService.setAuthToken(null);
+      localStorage.removeItem("ps_admin_token");
+      setIsAdmin(false);
+      setShowAdminLogin(true);
+      window.location.hash = "admin";
+    };
+    window.addEventListener("session-expired", onSessionExpired);
+    return () =>
+      window.removeEventListener("session-expired", onSessionExpired);
   }, []);
 
   useEffect(() => {
@@ -62,6 +77,16 @@ const App: React.FC = () => {
         e.preventDefault();
         if (!isAdmin) {
           setShowAdminLogin(true);
+        } else {
+          navigateToPage("admin");
+        }
+      }
+      // Alt + A for admin login
+      if (e.altKey && e.key === "a") {
+        e.preventDefault();
+        if (!isAdmin) {
+          setShowAdminLogin(true);
+          window.location.hash = "admin";
         } else {
           navigateToPage("admin");
         }
@@ -109,10 +134,11 @@ const App: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = await storageService.verifyPassword(password);
-    if (ok) {
+    const result = await storageService.verifyPassword(password);
+    if (result.success && result.token) {
+      storageService.setAuthToken(result.token);
+      localStorage.setItem("ps_admin_token", result.token);
       setIsAdmin(true);
-      localStorage.setItem("ps_is_admin", "true");
       setShowAdminLogin(false);
       setLoginError(false);
       setPassword("");
@@ -123,8 +149,15 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    fetch("/api/auth/logout", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("ps_admin_token")}`,
+      },
+    }).catch(() => {});
+    storageService.setAuthToken(null);
+    localStorage.removeItem("ps_admin_token");
     setIsAdmin(false);
-    localStorage.removeItem("ps_is_admin");
     window.location.hash = "";
   };
 
@@ -194,9 +227,39 @@ const App: React.FC = () => {
                     tabIndex={-1}
                   >
                     {showLoginPassword ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                        />
+                      </svg>
                     ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        />
+                      </svg>
                     )}
                   </button>
                 </div>
@@ -238,8 +301,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col antialiased font-sans selection:bg-indigo-100 selection:text-indigo-900">
-      <nav className="bg-white/80 backdrop-blur-xl border-b border-gray-100/50 px-6 py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm">
-        <div className="flex items-center gap-3">
+      <nav
+        dir="ltr"
+        style={{ direction: "ltr", flexDirection: "row" }}
+        className="bg-white/80 backdrop-blur-xl border-b border-gray-100/50 px-6 py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm"
+      >
+        <div className="flex items-center gap-3 cursor-pointer" style={{ direction: "ltr" }} onClick={() => (window.location.hash = "")}>
           <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white overflow-hidden shadow-sm">
             {settings.logoUrl ? (
               <img
@@ -258,94 +325,74 @@ const App: React.FC = () => {
             )}
           </div>
           <div className="flex flex-col justify-center">
-            <span className="text-xl font-bold tracking-tight text-gray-900 truncate max-w-[150px] sm:max-w-[300px]">
-              {settings.shopName || TRANSLATIONS.appTitle[lang]}
-            </span>
+<span
+  dir="auto"
+  className="text-xl font-bold tracking-tight text-gray-900 truncate max-w-[150px] sm:max-w-[300px]"
+>
+  {settings.shopName || TRANSLATIONS.appTitle[lang]}
+</span>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <LanguageToggle currentLang={lang} onToggle={setLang} />
-          <button
-            onClick={handleToggleMode}
-            className="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-all flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-indigo-50 hover:shadow-sm border border-transparent hover:border-indigo-100 active:scale-95"
-          >
-            {isAdmin && currentHash === "#studio" ? (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-                {lang === "ar" ? "لوحة التحكم" : "Dashboard"}
-              </>
-            ) : isAdmin ? (
-              <>
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                  ></path>
-                </svg>
-                {lang === "ar" ? "صفحة الرفع" : "Back to Upload"}
-              </>
-            ) : showAdminLogin ? (
-              <>
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  ></path>
-                </svg>
-                {lang === "ar" ? "إلغاء" : "Cancel"}
-              </>
-            ) : (
-              <>
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  ></path>
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  ></path>
-                </svg>
-                {TRANSLATIONS.adminLogin[lang]}
-              </>
-            )}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleToggleMode}
+              className="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-all flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-indigo-50 hover:shadow-sm border border-transparent hover:border-indigo-100 active:scale-95"
+            >
+              {currentHash === "#studio" ? (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                    />
+                  </svg>
+                  {lang === "ar" ? "لوحة التحكم" : "Dashboard"}
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                    />
+                  </svg>
+                  {lang === "ar" ? "صفحة الرفع" : "Back to Upload"}
+                </>
+              )}
+            </button>
+          )}
         </div>
       </nav>
 
       <main
         className={`container mx-auto py-6 px-4 flex-grow transition-opacity duration-150 ${isTransitioning ? "opacity-0" : "opacity-100"}`}
       >
-        {renderContent()}
+        <div key={lang} className="animate-[langFadeIn_0.25s_ease-out]">
+          {renderContent()}
+        </div>
       </main>
 
-      <footer className="py-4 text-center text-gray-400 text-sm border-t border-gray-100 bg-white">
+      <footer
+        dir="ltr"
+        className="py-4 text-center text-gray-400 text-sm border-t border-gray-100 bg-white"
+      >
         <p>
           &copy; {new Date().getFullYear()} {settings.shopName}.{" "}
           {lang === "ar"

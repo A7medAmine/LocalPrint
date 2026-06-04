@@ -1,31 +1,48 @@
-
-import React from 'react';
-import { Language } from '../types';
+import React from "react";
+import { Language } from "../types";
 
 interface LanguageToggleProps {
   currentLang: Language;
   onToggle: (lang: Language) => void;
 }
 
-const LanguageToggle: React.FC<LanguageToggleProps> = ({ currentLang, onToggle }) => {
+const LanguageToggle: React.FC<LanguageToggleProps> = ({
+  currentLang,
+  onToggle,
+}) => {
   return (
-    <div className="flex items-center gap-2 bg-white rounded-full p-1 shadow-sm border border-gray-200">
-      <button
-        onClick={() => onToggle('en')}
-        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-          currentLang === 'en' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'
-        }`}
-      >
-        EN
-      </button>
-      <button
-        onClick={() => onToggle('ar')}
-        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-          currentLang === 'ar' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'
-        }`}
-      >
-        عربي
-      </button>
+    <div
+      dir="ltr"
+      className="relative inline-flex items-center bg-gray-100 border border-gray-200 rounded-full p-[3px]"
+      role="group"
+      aria-label="Language selector"
+    >
+      {/* Sliding pill */}
+      <div
+        className="absolute top-[3px] bottom-[3px] rounded-full bg-indigo-600 transition-transform duration-[280ms] ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform"
+        style={{
+          width: "calc(50% - 3px)",
+          transform:
+            currentLang === "ar"
+              ? "translateX(calc(100% + 2px))"
+              : "translateX(0)",
+        }}
+        aria-hidden="true"
+      />
+
+      {(["en", "ar"] as Language[]).map((lang) => (
+        <button
+          key={lang}
+          type="button"
+          onClick={() => onToggle(lang)}
+          aria-pressed={currentLang === lang}
+          className={`relative z-10 w-12 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 text-center ${
+            currentLang === lang ? "text-white" : "text-gray-500"
+          }`}
+        >
+          {lang === "en" ? "EN" : "عربي"}
+        </button>
+      ))}
     </div>
   );
 };
