@@ -215,7 +215,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [mode, setMode] = useState<"crop" | "perspective">("crop");
+  const [mode, setMode] = useState<"edit" | "crop" | "perspective">("edit");
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -382,6 +382,12 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
       ctx.putImageData(imgData, 0, 0);
     }
 
+    if (mode === "edit") {
+      ctx.filter = filterValuesToCss(filters);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return;
+    }
+
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
 
     if (mode === "crop") {
@@ -479,6 +485,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   const handleMouseDown = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (mode === "edit") return;
     const rect = canvas.getBoundingClientRect();
 
     const x = (e.clientX - rect.left) / zoom;
@@ -557,7 +564,28 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     const filterStr = filterValuesToCss(filters);
     const upscaleFactor = filters.upscale;
 
-    if (mode === "crop") {
+    if (mode === "edit") {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.filter = filterStr;
+      ctx.drawImage(image, 0, 0);
+      const imgData = ctx.getImageData(0, 0, image.width, image.height);
+      if (filters.sharpness > 0) {
+        const s = filters.sharpness / 100;
+        applyConv3x3(imgData, image.width, image.height, [0, -s, 0, -s, 1 + 4 * s, -s, 0, -s, 0], 1);
+      }
+      if (filters.clarity > 0) {
+        applyClarity(imgData, image.width, image.height, filters.clarity / 100);
+      }
+      ctx.putImageData(imgData, 0, 0);
+      canvas.toBlob((blob) => {
+        setIsProcessing(false);
+        if (blob) { setPendingBlob(blob); setShowConfirm(true); }
+      }, imageBlob.type);
+    } else if (mode === "crop") {
       const outW = Math.round(cropRect.w * scale * upscaleFactor);
       const outH = Math.round(cropRect.h * scale * upscaleFactor);
       const canvas = document.createElement("canvas");
@@ -749,6 +777,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-sm hidden sm:block">{t("edit")}</h3>
             <div className="flex bg-white rounded-lg p-0.5 shadow-sm border border-gray-200">
+              <button onClick={() => setMode("edit")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "edit" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{t("edit")}</button>
               <button onClick={() => setMode("crop")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "crop" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{t("normalCrop")}</button>
               <button onClick={() => setMode("perspective")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "perspective" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{t("perspectiveCut")}</button>
             </div>
