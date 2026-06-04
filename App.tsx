@@ -57,7 +57,6 @@ const App: React.FC = () => {
     window.dispatchEvent(new CustomEvent("ps:langchange", { detail: lang }));
   }, [lang]);
 
-  // Load settings from server
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -73,7 +72,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + K for quick admin access
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         if (!isAdmin) {
@@ -82,7 +80,6 @@ const App: React.FC = () => {
           navigateToPage("admin");
         }
       }
-      // Alt + A for admin login
       if (e.altKey && e.key === "a") {
         e.preventDefault();
         if (!isAdmin) {
@@ -92,17 +89,14 @@ const App: React.FC = () => {
           navigateToPage("admin");
         }
       }
-      // Ctrl/Cmd + U for upload page
       if ((e.ctrlKey || e.metaKey) && e.key === "u") {
         e.preventDefault();
         navigateToPage("upload");
       }
-      // Ctrl/Cmd + P for Print Studio
       if ((e.ctrlKey || e.metaKey) && e.key === "p") {
         e.preventDefault();
         navigateToPage("studio");
       }
-      // Escape to cancel login or go to upload
       if (e.key === "Escape") {
         if (showAdminLogin && !isAdmin) {
           setShowAdminLogin(false);
@@ -202,81 +196,69 @@ const App: React.FC = () => {
 
     if (showAdminLogin && !isAdmin) {
       return (
-        <div className="max-w-md mx-auto">
-          <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-            <h2 className="text-2xl font-bold mb-6 text-center">
-              {TRANSLATIONS.adminLogin[lang]}
-            </h2>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {TRANSLATIONS.password[lang]}
-                </label>
-                <div className="relative">
-                  <input
-                    type={showLoginPassword ? "text" : "password"}
-                    autoFocus
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowLoginPassword(!showLoginPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
-                    tabIndex={-1}
-                  >
-                    {showLoginPassword ? (
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                        />
-                      </svg>
-                    )}
-                  </button>
+        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
+          <div className="w-full max-w-sm animate-[scaleIn_0.2s_ease-out]">
+            <div className="bg-white rounded-xl shadow-card border border-[#E2E8F0] p-8">
+              <div className="text-center mb-8">
+                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
                 </div>
-              </div>
-              {loginError && (
-                <p className="text-sm text-red-600 font-medium">
-                  {lang === "ar" ? "كلمة المرور خاطئة" : "Incorrect password"}
+                <h2 className="text-xl font-bold text-[#0F172A]">
+                  {TRANSLATIONS.adminLogin[lang]}
+                </h2>
+                <p className="text-sm text-[#64748B] mt-1">
+                  {lang === "ar" ? "أدخل كلمة المرور للدخول" : "Enter your password to continue"}
                 </p>
-              )}
-              <button
-                type="submit"
-                className="w-full bg-gray-900 text-white font-bold py-2 rounded-lg hover:bg-black transition"
-              >
-                {TRANSLATIONS.loginBtn[lang]}
-              </button>
-            </form>
+              </div>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <div className="relative">
+                    <input
+                      type={showLoginPassword ? "text" : "password"}
+                      autoFocus
+                      className="w-full h-12 px-4 pr-11 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#64748B] transition"
+                      tabIndex={-1}
+                    >
+                      {showLoginPassword ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                {loginError && (
+                  <p className="text-sm text-danger font-medium flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {lang === "ar" ? "كلمة المرور خاطئة" : "Incorrect password"}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  className="w-full h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-primary-600 transition-all active:scale-[0.98] shadow-card"
+                >
+                  {TRANSLATIONS.loginBtn[lang]}
+                </button>
+              </form>
+              <div className="mt-6 pt-4 border-t border-[#E2E8F0] flex justify-center">
+                <LanguageToggle currentLang={lang} onToggle={setLang} />
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -297,110 +279,62 @@ const App: React.FC = () => {
       );
     }
 
-    return <UploadView lang={lang} shopSettings={settings} />;
+    return (
+      <div className="min-h-screen bg-[#F8FAFC]">
+        <nav className="bg-white/80 backdrop-blur-xl border-b border-[#E2E8F0]/50 px-6 py-3 flex items-center justify-between sticky top-0 z-50 shadow-topbar">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => (window.location.hash = "")}>
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white overflow-hidden shadow-sm">
+              {settings.logoUrl ? (
+                <img
+                  src={settings.logoUrl}
+                  alt="Logo"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm-1 9H8v2h4v-2z"
+                    clipRule="evenodd"
+                  ></path>
+                </svg>
+              )}
+            </div>
+            <div className="flex flex-col justify-center">
+              <span className="text-lg font-bold tracking-tight text-[#0F172A] truncate max-w-[150px] sm:max-w-[300px]">
+                {settings.shopName || TRANSLATIONS.appTitle[lang]}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <LanguageToggle currentLang={lang} onToggle={setLang} />
+            <button
+              onClick={() => {
+                setShowAdminLogin(true);
+                window.location.hash = "admin";
+              }}
+              className="text-sm font-medium text-[#64748B] hover:text-primary transition-colors px-4 py-2 rounded-xl hover:bg-primary/5"
+            >
+              {lang === "ar" ? "المسؤول" : "Admin"}
+            </button>
+          </div>
+        </nav>
+
+        <main className="container mx-auto py-6 px-4 flex-grow">
+          <div key={lang} className="animate-[langFadeIn_0.25s_ease-out]">
+            <UploadView lang={lang} shopSettings={settings} />
+          </div>
+        </main>
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col antialiased font-sans selection:bg-indigo-100 selection:text-indigo-900">
-      <nav
-        dir="ltr"
-        style={{ direction: "ltr", flexDirection: "row" }}
-        className="bg-white/80 backdrop-blur-xl border-b border-gray-100/50 px-6 py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm"
-      >
-        <div className="flex items-center gap-3 cursor-pointer" style={{ direction: "ltr" }} onClick={() => (window.location.hash = "")}>
-          <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white overflow-hidden shadow-sm">
-            {settings.logoUrl ? (
-              <img
-                src={settings.logoUrl}
-                alt="Logo"
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm-1 9H8v2h4v-2z"
-                  clipRule="evenodd"
-                ></path>
-              </svg>
-            )}
-          </div>
-          <div className="flex flex-col justify-center">
-<span
-  dir="auto"
-  className="text-xl font-bold tracking-tight text-gray-900 truncate max-w-[150px] sm:max-w-[300px]"
->
-  {settings.shopName || TRANSLATIONS.appTitle[lang]}
-</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <LanguageToggle currentLang={lang} onToggle={setLang} />
-          {isAdmin && (
-            <button
-              onClick={handleToggleMode}
-              className="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-all flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-indigo-50 hover:shadow-sm border border-transparent hover:border-indigo-100 active:scale-95"
-            >
-              {currentHash === "#studio" ? (
-                <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                    />
-                  </svg>
-                  {lang === "ar" ? "لوحة التحكم" : "Dashboard"}
-                </>
-              ) : (
-                <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                    />
-                  </svg>
-                  {lang === "ar" ? "صفحة الرفع" : "Back to Upload"}
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </nav>
-
-      <main
-        className={`container mx-auto py-6 px-4 flex-grow transition-opacity duration-150 ${isTransitioning ? "opacity-0" : "opacity-100"}`}
-      >
-        <div key={lang} className="animate-[langFadeIn_0.25s_ease-out]">
-          {renderContent()}
-        </div>
-      </main>
-
-      <footer
-        dir="ltr"
-        className="py-4 text-center text-gray-400 text-sm border-t border-gray-100 bg-white"
-      >
-        <p>
-          &copy; {new Date().getFullYear()} {settings.shopName}.{" "}
-          {lang === "ar"
-            ? "نظام إدارة طباعة محلي."
-            : "Local Print Management System."}
-        </p>
-      </footer>
+    <div className="min-h-screen bg-[#F8FAFC] antialiased font-sans selection:bg-primary/20 selection:text-primary-700">
+      <div key={lang} className="animate-[langFadeIn_0.25s_ease-out]">
+        {renderContent()}
+      </div>
     </div>
   );
 };
