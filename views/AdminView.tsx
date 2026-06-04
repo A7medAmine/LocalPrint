@@ -50,6 +50,7 @@ interface AdminViewProps {
   onLogout: () => void;
   onSettingsUpdate: (settings: ShopSettings) => void;
   currentSettings: ShopSettings;
+  darkMode?: boolean;
 }
 
 interface CustomerGroup {
@@ -65,6 +66,7 @@ const AdminView: React.FC<AdminViewProps> = ({
   onLogout,
   onSettingsUpdate,
   currentSettings,
+  darkMode = false,
 }) => {
   // Safe translation function
   const t = (key: string) => {
@@ -1104,7 +1106,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
   return (
     <div
-      className={`max-w-7xl mx-auto px-4 pb-32 ${
+      className={`max-w-7xl mx-auto px-4 pb-32 text-gray-900 dark:text-gray-100 ${
         isRtl ? "rtl text-right" : ""
       }`}
     >
@@ -1124,7 +1126,7 @@ const AdminView: React.FC<AdminViewProps> = ({
       {selectedJobIds.size > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[90] bg-gray-900/90 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 animate-slide-up border border-white/10 max-w-[95vw] md:max-w-max">
           <div className="flex items-center gap-3 border-r border-white/20 pr-6 mr-2">
-            <span className="bg-indigo-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm">
+            <span className="bg-indigo-50 dark:bg-indigo-900/20 text-white dark:text-gray-100 w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm">
               {selectedJobIds.size}
             </span>
             <span className="text-sm font-medium whitespace-nowrap">
@@ -1133,27 +1135,27 @@ const AdminView: React.FC<AdminViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
-            <Button variant="ghost" size="sm" onClick={handleBulkPrint} title={t("bulkPrint")} className="flex-col gap-1 h-auto text-inherit hover:text-indigo-400">
+            <Button variant="ghost" size="sm" onClick={handleBulkPrint} title={t("bulkPrint")} className="flex-col gap-1 h-auto text-inherit hover:text-indigo-400 dark:hover:text-indigo-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("print")}</span>
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleBulkDownload} title={t("bulkDownload")} className="flex-col gap-1 h-auto text-inherit hover:text-indigo-400">
+            <Button variant="ghost" size="sm" onClick={handleBulkDownload} title={t("bulkDownload")} className="flex-col gap-1 h-auto text-inherit hover:text-indigo-400 dark:hover:text-indigo-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("download")}</span>
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.PRINTED)} title={t("markAsPrinted")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400">
+            <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.PRINTED)} title={t("markAsPrinted")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400 dark:hover:text-green-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("printed")}</span>
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.READY)} title={t("markReady")} className="flex-col gap-1 h-auto text-inherit hover:text-blue-400">
+            <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.READY)} title={t("markReady")} className="flex-col gap-1 h-auto text-inherit hover:text-blue-400 dark:hover:text-blue-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("ready")}</span>
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.PAID)} title={t("markPaid")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400">
+            <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.PAID)} title={t("markPaid")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400 dark:hover:text-green-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("paid")}</span>
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.UNPAID)} title={t("markUnpaid")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400">
+            <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.UNPAID)} title={t("markUnpaid")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400 dark:hover:text-red-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("unpaid")}</span>
             </Button>
@@ -1168,19 +1170,19 @@ const AdminView: React.FC<AdminViewProps> = ({
                   sessionStorage.setItem("ps_card_front", front.id);
                   sessionStorage.setItem("ps_card_back", back.id);
                   window.location.hash = "studio";
-                }} title="Print as Card" className="flex-col gap-1 h-auto text-inherit hover:text-pink-400">
+                }} title="Print as Card" className="flex-col gap-1 h-auto text-inherit hover:text-pink-400 dark:hover:text-pink-300">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                   <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{isRtl ? "بطاقة" : "Card"}</span>
                 </Button>
               ) : null;
             })()}
-            <Button variant="ghost" size="sm" onClick={handleBulkDelete} title={t("bulkDelete")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400">
+            <Button variant="ghost" size="sm" onClick={handleBulkDelete} title={t("bulkDelete")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400 dark:hover:text-red-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
               <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("delete")}</span>
             </Button>
           </div>
 
-          <Button variant="ghost" size="icon" onClick={() => setSelectedJobIds(new Set())} className="ml-4 text-white hover:bg-white/10">
+          <Button variant="ghost" size="icon" onClick={() => setSelectedJobIds(new Set())} className="ml-4 text-white hover:bg-white dark:bg-gray-800/10">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </Button>
         </div>
@@ -1188,8 +1190,8 @@ const AdminView: React.FC<AdminViewProps> = ({
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t("dashboard")}</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t("dashboard")}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {isRtl
               ? "إدارة المحل وطلبات الطباعة"
               : "Manage your shop and print requests"}
@@ -1207,7 +1209,7 @@ const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </div>
 
-      <div className="flex border-b border-gray-100 mb-5 gap-1">
+      <div className="flex border-b border-gray-100 dark:border-gray-800 mb-5 gap-1">
         <Button
           variant={activeTab === "jobs" ? "default" : "ghost"}
           size="sm"
@@ -1240,40 +1242,40 @@ const AdminView: React.FC<AdminViewProps> = ({
             {/* Stats Summary Bar */}
             {!loading && groups.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                <div className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500">{isRtl ? "قيد الانتظار" : "Pending"}</div>
-                    <div className="text-xl font-bold text-yellow-600">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PENDING).length, 0)}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "قيد الانتظار" : "Pending"}</div>
+                    <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PENDING).length, 0)}</div>
                   </div>
                 </div>
-                <div className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+                <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500">{isRtl ? "جاهز للاستلام" : "Ready"}</div>
-                    <div className="text-xl font-bold text-blue-600">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.READY).length, 0)}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "جاهز للاستلام" : "Ready"}</div>
+                    <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.READY).length, 0)}</div>
                   </div>
                 </div>
-                <div className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500">{isRtl ? "تمت الطباعة" : "Printed"}</div>
-                    <div className="text-xl font-bold text-green-600">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PRINTED).length, 0)}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "تمت الطباعة" : "Printed"}</div>
+                    <div className="text-xl font-bold text-green-600 dark:text-green-400">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PRINTED).length, 0)}</div>
                   </div>
                 </div>
-                <div className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500">{isRtl ? "إجمالي العملاء" : "Customers"}</div>
-                    <div className="text-xl font-bold text-indigo-600">{groups.length}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "إجمالي العملاء" : "Customers"}</div>
+                    <div className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{groups.length}</div>
                   </div>
                 </div>
               </div>
@@ -1282,7 +1284,7 @@ const AdminView: React.FC<AdminViewProps> = ({
             {/* Search Bar */}
             {!loading && groups.length > 0 && (
               <div className="relative mb-4">
-                <div className={`absolute ${isRtl ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 text-gray-400`}>
+                <div className={`absolute ${isRtl ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500`}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 </div>
                 <Input
@@ -1317,29 +1319,29 @@ const AdminView: React.FC<AdminViewProps> = ({
             {loading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="bg-white rounded-2xl shadow-md shadow-indigo-100/40 border border-white overflow-hidden animate-pulse">
+                  <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md dark:shadow-gray-800/50 shadow-indigo-100/40 dark:shadow-indigo-900/20 border border-white dark:border-gray-700 overflow-hidden animate-pulse">
                     <div className="flex items-center px-4 py-3 gap-3">
-                      <div className="w-4 h-4 rounded bg-gray-200 shrink-0" />
-                      <div className="w-8 h-8 rounded-full bg-gray-200 shrink-0" />
+                      <div className="w-4 h-4 rounded bg-gray-200 dark:bg-gray-700 shrink-0" />
+                      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 shrink-0" />
                       <div className="flex-1 space-y-1.5">
-                        <div className="h-3.5 w-36 rounded-full bg-gray-200" />
-                        <div className="h-3 w-24 rounded-full bg-gray-100" />
+                        <div className="h-3.5 w-36 rounded-full bg-gray-200 dark:bg-gray-700" />
+                        <div className="h-3 w-24 rounded-full bg-gray-100 dark:bg-gray-800" />
                       </div>
-                      <div className="h-5 w-16 rounded-full bg-gray-200" />
-                      <div className="h-5 w-5 rounded bg-gray-200" />
+                      <div className="h-5 w-16 rounded-full bg-gray-200 dark:bg-gray-700" />
+                      <div className="h-5 w-5 rounded bg-gray-200 dark:bg-gray-700" />
                     </div>
-                    <div className="border-t border-gray-50 px-4 py-2 space-y-2">
+                    <div className="border-t border-gray-50 dark:border-gray-800 px-4 py-2 space-y-2">
                       {[1, 2].map((j) => (
                         <div key={j} className="flex items-center gap-3 py-1.5">
-                          <div className="w-4 h-4 rounded bg-gray-200 shrink-0" />
-                          <div className="w-6 h-6 rounded bg-gray-200 shrink-0" />
+                          <div className="w-4 h-4 rounded bg-gray-200 dark:bg-gray-700 shrink-0" />
+                          <div className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 shrink-0" />
                           <div className="flex-1 space-y-1">
-                            <div className="h-3 w-44 rounded-full bg-gray-200" />
-                            <div className="h-2.5 w-28 rounded-full bg-gray-100" />
+                            <div className="h-3 w-44 rounded-full bg-gray-200 dark:bg-gray-700" />
+                            <div className="h-2.5 w-28 rounded-full bg-gray-100 dark:bg-gray-800" />
                           </div>
-                          <div className="h-5 w-12 rounded-full bg-gray-200" />
-                          <div className="h-5 w-5 rounded bg-gray-200" />
-                          <div className="h-5 w-5 rounded bg-gray-200" />
+                          <div className="h-5 w-12 rounded-full bg-gray-200 dark:bg-gray-700" />
+                          <div className="h-5 w-5 rounded bg-gray-200 dark:bg-gray-700" />
+                          <div className="h-5 w-5 rounded bg-gray-200 dark:bg-gray-700" />
                         </div>
                       ))}
                     </div>
@@ -1347,12 +1349,12 @@ const AdminView: React.FC<AdminViewProps> = ({
                 ))}
               </div>
             ) : groups.length === 0 ? (
-              <div className="p-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-200">
+              <div className="p-12 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
                 <p>{t("noJobs")}</p>
               </div>
             ) : filteredGroups.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 bg-white rounded-2xl border border-gray-200">
-                <svg className="w-10 h-10 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <svg className="w-10 h-10 mx-auto mb-2 text-gray-300 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <p>{isRtl ? "لا توجد نتائج" : "No results found"}</p>
               </div>
             ) : (
@@ -1381,13 +1383,13 @@ const AdminView: React.FC<AdminViewProps> = ({
                   return (
                     <div
                       key={group.key}
-                      className="bg-white rounded-2xl shadow-md shadow-indigo-100/40 border border-white overflow-hidden mb-3 transition-all"
+                      className="bg-white dark:bg-gray-800 rounded-2xl shadow-md dark:shadow-gray-800/50 shadow-indigo-100/40 dark:shadow-indigo-900/20 border border-white dark:border-gray-700 overflow-hidden mb-3 transition-all"
                     >
-                      <div className="flex items-center border-b border-gray-50 bg-white group/header">
+                      <div className="flex items-center border-b border-gray-50 dark:border-gray-800 bg-white dark:bg-gray-800 group/header">
                         <div className="px-4 py-2.5 flex items-center">
                           <input
                             type="checkbox"
-                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 dark:text-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 cursor-pointer"
                             checked={
                               allInGroupSelected && group.jobs.length > 0
                             }
@@ -1396,14 +1398,14 @@ const AdminView: React.FC<AdminViewProps> = ({
                         </div>
                         <button
                           onClick={() => toggleGroup(group.key)}
-                          className="flex-1 px-2 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                          className="flex-1 px-2 py-2.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
                           <div className="flex items-center gap-3 flex-1 min-w-0">
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                                 pendingCount > 0
-                                  ? "bg-indigo-100 text-indigo-600"
-                                  : "bg-gray-100 text-gray-400"
+                                  ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
+                                  : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500"
                               }`}
                             >
                               <svg
@@ -1421,15 +1423,15 @@ const AdminView: React.FC<AdminViewProps> = ({
                               </svg>
                             </div>
                             <div className="truncate text-left">
-                              <h3 className="text-sm font-bold text-gray-900 truncate">
+                              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
                                 {group.customerName ||
                                   (isRtl ? "بدون اسم" : "No Name")}
                               </h3>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
                                 {group.phoneNumber ||
                                   (isRtl ? "بدون هاتف" : "No Phone")}
                                 {" · "}
-                                <span className="text-gray-400">{formatRelativeTime(group.latestDate, lang)}</span>
+                                <span className="text-gray-400 dark:text-gray-500">{formatRelativeTime(group.latestDate, lang)}</span>
                               </p>
                             </div>
                           </div>
@@ -1437,15 +1439,15 @@ const AdminView: React.FC<AdminViewProps> = ({
                             {customerTotal > 0 && (
                               <div className="flex flex-col items-end">
                                 {customerDiscount > 0 && (
-                                  <span className="text-xs text-gray-400 line-through">
+                                  <span className="text-xs text-gray-400 dark:text-gray-500 line-through">
                                     {formatPrice(customerTotal + customerDiscount)}
                                   </span>
                                 )}
-                                <span className="text-sm font-bold text-green-700 bg-green-100/50 px-3 py-1 rounded-full border border-green-200/50 shadow-sm whitespace-nowrap">
+                                <span className="text-sm font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-3 py-1 rounded-full border border-green-200 dark:border-green-800/30 shadow-sm dark:shadow-gray-900/50 whitespace-nowrap">
                                   {formatPrice(customerTotal)}
                                 </span>
                                 {customerDiscount > 0 && (
-                                  <span className="text-xs text-green-600 mt-0.5">
+                                  <span className="text-xs text-green-600 dark:text-green-400 mt-0.5">
                                     {isRtl ? "تم توفير" : "Saved"} {formatPrice(customerDiscount)}
                                   </span>
                                 )}
@@ -1454,14 +1456,14 @@ const AdminView: React.FC<AdminViewProps> = ({
                             <span
                               className={`px-3 py-1 text-xs font-bold rounded-full ${
                                 pendingCount > 0
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : "bg-green-100 text-green-700"
+                                  ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                  : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                               }`}
                             >
                               {group.jobs.length} {isRtl ? "ملف" : "files"}
                             </span>
                             <svg
-                              className={`w-5 h-5 text-gray-400 transition-transform ${
+                              className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform ${
                                 isExpanded ? "rotate-180" : ""
                               }`}
                               fill="none"
@@ -1479,14 +1481,14 @@ const AdminView: React.FC<AdminViewProps> = ({
                         </button>
                       </div>
                       {isExpanded && (
-                        <div className="bg-gray-50/30 overflow-x-auto">
+                        <div className="bg-gray-50 dark:bg-gray-900/30 overflow-x-auto">
                           <table className="w-full text-left border-collapse">
-                            <thead className="bg-[#F8FAFC] border-b border-gray-100">
+                            <thead className="bg-[#F8FAFC] dark:bg-gray-950 border-b border-gray-100 dark:border-gray-800">
                               <tr>
                                 <th className="px-4 py-2 w-10">
                                   <input
                                     type="checkbox"
-                                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 dark:text-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 cursor-pointer"
                                     checked={
                                       allInGroupSelected &&
                                       group.jobs.length > 0
@@ -1497,31 +1499,31 @@ const AdminView: React.FC<AdminViewProps> = ({
                                   />
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {t("fileName")}
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {isRtl ? "الإعدادات" : "Settings"}
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {isRtl ? "التكلفة" : "Cost"}
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {t("status")}
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {t("payment")}
                                 </th>
-                                <th className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                <th className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                                   {t("actions")}
                                 </th>
                               </tr>
@@ -1535,16 +1537,16 @@ const AdminView: React.FC<AdminViewProps> = ({
                                 return (
                                   <tr
                                     key={job.id}
-                                    className={`group/row transition-all duration-200 border-b border-gray-50 last:border-0 ${
+                                    className={`group/row transition-all duration-200 border-b border-gray-50 dark:border-gray-800 last:border-0 ${
                                       isSelected
-                                        ? "bg-indigo-50/60"
-                                        : "hover:bg-white"
+                                        ? "bg-indigo-50 dark:bg-indigo-900/20"
+                                        : "hover:bg-white dark:bg-gray-800"
                                     }`}
                                   >
                                     <td className="px-4 py-2">
                                       <input
                                         type="checkbox"
-                                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 dark:text-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 cursor-pointer"
                                         checked={isSelected}
                                         onChange={() => toggleSelectJob(job.id)}
                                       />
@@ -1554,12 +1556,12 @@ const AdminView: React.FC<AdminViewProps> = ({
                                         <span
                                           className={`text-[10px] font-bold px-2 py-1 rounded-md border flex-shrink-0 ${
                                             ext === "PDF"
-                                              ? "bg-red-50 text-red-600 border-red-100"
+                                              ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-800/30"
                                               : ext === "DOCX" || ext === "DOC"
-                                                ? "bg-blue-50 text-blue-600 border-blue-100"
+                                                ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/30"
                                                 : officeFile
-                                                  ? "bg-green-50 text-green-700 border-green-200"
-                                                  : "bg-indigo-50 text-indigo-600 border-indigo-100"
+                                                  ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50"
+                                                  : "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800/30"
                                           }`}
                                         >
                                           {ext}
@@ -1567,18 +1569,18 @@ const AdminView: React.FC<AdminViewProps> = ({
                                         <div className="flex flex-col">
                                           <span className="flex items-center gap-1.5">
                                             <span
-                                              className="text-sm font-semibold text-gray-900 max-w-[200px] truncate"
+                                              className="text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[200px] truncate"
                                               title={job.fileName}
                                             >
                                               {job.fileName}
                                             </span>
                                             {job.source === "gmail" && (
-                                              <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap shrink-0">
+                                              <span className="text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap shrink-0">
                                                 Gmail
                                               </span>
                                             )}
                                           </span>
-                                          <span className="text-xs text-gray-400">
+                                          <span className="text-xs text-gray-400 dark:text-gray-500">
                                             {formatSize(job.fileSize)}
                                           </span>
                                         </div>
@@ -1586,23 +1588,23 @@ const AdminView: React.FC<AdminViewProps> = ({
                                       {job.notes && (
                                         <div className="mt-2">
                                           {expandedNotes.has(job.id) || !job.id.startsWith("gmail_") ? (
-                                            <div className="text-[11px] text-indigo-600 bg-indigo-50/50 px-2 py-1 rounded-md inline-block font-medium max-w-xs break-words">
+                                            <div className="text-[11px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-md inline-block font-medium max-w-xs break-words">
                                               {job.notes}
                                             </div>
                                           ) : (
                                             <>
-                                              <div className="text-[11px] text-indigo-600 bg-indigo-50/50 px-2 py-1 rounded-md inline-block font-medium max-w-xs break-words">
+                                              <div className="text-[11px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-md inline-block font-medium max-w-xs break-words">
                                                 {job.notes.length > 120 ? job.notes.slice(0, 120) + "..." : job.notes}
                                               </div>
                                               {job.notes.length > 120 && (
-                                                <button type="button" onClick={() => toggleNoteExpand(job.id)} className="text-[10px] text-indigo-500 hover:text-indigo-700 ml-1 align-middle underline">
+                                                <button type="button" onClick={() => toggleNoteExpand(job.id)} className="text-[10px] text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-400 dark:hover:text-indigo-300 ml-1 align-middle underline">
                                                   {isRtl ? "قراءة المزيد" : "Read more"}
                                                 </button>
                                               )}
                                             </>
                                           )}
                                           {expandedNotes.has(job.id) && (
-                                            <button onClick={() => toggleNoteExpand(job.id)} className="text-[10px] text-indigo-500 hover:text-indigo-700 ml-1 align-middle underline">
+                                            <button onClick={() => toggleNoteExpand(job.id)} className="text-[10px] text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-400 dark:hover:text-indigo-300 ml-1 align-middle underline">
                                               {isRtl ? "طي" : "Less"}
                                             </button>
                                           )}
@@ -1635,7 +1637,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
                                           {/* Copies Stepper */}
                                           {editingCopiesJobId === job.id ? (
-                                            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm w-max">
+                                            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-0.5 shadow-sm dark:shadow-gray-900/50 w-max">
                                               <Button
                                                 type="button"
                                                 variant="ghost"
@@ -1696,7 +1698,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                                             value={job.printPreferences?.paperType || "normal"}
                                             onValueChange={(val) => handlePaperTypeChange(job, val)}
                                           >
-                                            <SelectTrigger disabled={savingPrefsJobId === job.id} className="h-7 text-xs px-2 py-0 border-amber-200 bg-amber-50 text-amber-700 rounded-lg font-medium w-auto gap-1 focus:ring-amber-500">
+                                            <SelectTrigger disabled={savingPrefsJobId === job.id} className="h-7 text-xs px-2 py-0 border-amber-200 dark:border-amber-800/30 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg font-medium w-auto gap-1 focus:ring-amber-500 dark:focus:ring-amber-400">
                                               <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -1716,7 +1718,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                                       {(currentSettings.pricing || (currentSettings.paperTypes && currentSettings.paperTypes.length > 0)) ? (
                                         (() => {
                                           const isOffice = job.fileType?.includes("word") || job.fileType?.includes("document") || job.fileType?.includes("excel") || job.fileType?.includes("spreadsheet") || job.fileType?.includes("presentation") || job.fileType?.includes("powerpoint");
-                                          if (isOffice) return <span className="text-xs text-gray-400">-</span>;
+                                          if (isOffice) return <span className="text-xs text-gray-400 dark:text-gray-500">-</span>;
                                           const pageCount = jobPageCounts[job.id] || 1;
                                           const priceCalc = calculatePrintPrice(job, currentSettings, pageCount);
                                           const discountResult = calculateJobDiscount(job, priceCalc.totalPrice, pageCount, discountRules);
@@ -1726,24 +1728,24 @@ const AdminView: React.FC<AdminViewProps> = ({
                                             <div className="flex flex-col gap-2">
                                               <div className="flex flex-col">
                                                 {hasDiscount && (
-                                                  <span className="text-xs text-gray-400 line-through">
+                                                  <span className="text-xs text-gray-400 dark:text-gray-500 line-through">
                                                     {formatPrice(discountResult.originalAmount)}
                                                   </span>
                                                 )}
-                                                <span className={`text-sm font-black bg-green-100/50 px-2.5 py-1 rounded-md border border-green-200/50 shadow-sm w-max inline-block tracking-tight ${hasDiscount ? "text-green-700" : "text-green-700"}`}>
+                                                <span className={`text-sm font-black bg-green-100 dark:bg-green-900/20 px-2.5 py-1 rounded-md border border-green-200 dark:border-green-800/30 shadow-sm dark:shadow-gray-900/50 w-max inline-block tracking-tight ${hasDiscount ? "text-green-700 dark:text-green-400" : "text-green-700 dark:text-green-400"}`}>
                                                   {formatPrice(discountResult.finalAmount)}
                                                 </span>
                                                 {hasDiscount && discountResult.rule && (
-                                                  <span className="text-xs text-green-600 mt-0.5">
+                                                  <span className="text-xs text-green-600 dark:text-green-400 mt-0.5">
                                                     {isRtl ? "تم تطبيق خصم" : "Discount applied"}: {discountResult.rule.name}
                                                   </span>
                                                 )}
                                               </div>
-                                              <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium w-max">
+                                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 font-medium w-max">
                                                 <span>
                                                   {isRtl ? "الصفحات:" : "Pages:"}
                                                 </span>
-                                                <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] text-[11px]">
+                                                <span className="font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 px-1.5 py-0.5 rounded shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] text-[11px]">
                                                   {pageCount}
                                                 </span>
                                               </div>
@@ -1751,7 +1753,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                                           );
                                         })()
                                       ) : (
-                                        <span className="text-xs text-gray-400">
+                                        <span className="text-xs text-gray-400 dark:text-gray-500">
                                           -
                                         </span>
                                       )}
@@ -1760,10 +1762,10 @@ const AdminView: React.FC<AdminViewProps> = ({
                                       <span
                                         className={`px-3 py-1 text-[11px] font-bold rounded-full uppercase tracking-wide inline-block ${
                                           job.status === PrintStatus.PRINTED
-                                            ? "bg-green-100 text-green-700"
+                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                                             : job.status === PrintStatus.READY
-                                            ? "bg-blue-100 text-blue-700"
-                                            : "bg-yellow-100 text-yellow-700"
+                                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                                            : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
                                         }`}
                                       >
                                         {job.status === PrintStatus.PRINTED
@@ -1777,10 +1779,10 @@ const AdminView: React.FC<AdminViewProps> = ({
                                       <span
                                         className={`px-2 py-1 text-[11px] font-bold rounded-full inline-flex items-center gap-1 cursor-pointer hover:opacity-80 ${
                                           job.paymentStatus === PaymentStatus.PAID
-                                            ? "bg-green-100 text-green-700"
+                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                                             : job.paymentStatus === PaymentStatus.PARTIAL
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-red-100 text-red-700"
+                                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
                                         }`}
                                         onClick={() => handlePaymentClick(job)}
                                         title={isRtl ? "انقر لتعديل الدفع" : "Click to edit payment"}
@@ -1803,38 +1805,38 @@ const AdminView: React.FC<AdminViewProps> = ({
                                     <td className="px-4 py-2 align-top">
                                       <div className="flex flex-wrap gap-1 w-max">
                                         {!officeFile && (
-                                          <Button variant="ghost" size="icon" onClick={() => handlePrint(job)} title={t("print")} className="text-blue-600 hover:bg-blue-100 hover:text-blue-700">
+                                          <Button variant="ghost" size="icon" onClick={() => handlePrint(job)} title={t("print")} className="text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-400 dark:hover:text-blue-300">
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                           </Button>
                                         )}
-                                        <Button variant="ghost" size="icon" onClick={() => handlePreview(job)} title={isRtl ? "معاينة" : "Preview"} className="text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700">
+                                        <Button variant="ghost" size="icon" onClick={() => handlePreview(job)} title={isRtl ? "معاينة" : "Preview"} className="text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 hover:text-emerald-700 dark:hover:text-emerald-400">
                                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                         </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(job)} title={t("edit")} className="text-orange-600 hover:bg-orange-100 hover:text-orange-700">
+                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(job)} title={t("edit")} className="text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-700 dark:hover:text-orange-400">
                                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                         </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDownload(job)} title={t("download")} className="text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700">
+                                        <Button variant="ghost" size="icon" onClick={() => handleDownload(job)} title={t("download")} className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 dark:hover:text-indigo-300">
                                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                         </Button>
                                         <Select value={job.status} onValueChange={(val) => handleStatusChange(job.id, val as PrintStatus)}>
-                                          <SelectTrigger className={`h-8 w-9 border-0 p-0 ${job.status === PrintStatus.PRINTED ? "text-green-600 hover:bg-green-100" : job.status === PrintStatus.READY ? "text-blue-600 hover:bg-blue-100" : "text-yellow-600 hover:bg-yellow-100"}`}>
+                                          <SelectTrigger className={`h-8 w-9 border-0 p-0 ${job.status === PrintStatus.PRINTED ? "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30" : job.status === PrintStatus.READY ? "text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30" : "text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/30"}`}>
                                             <SelectValue>
                                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                             </SelectValue>
                                           </SelectTrigger>
                                           <SelectContent>
                                             <SelectItem value={PrintStatus.PENDING}>
-                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>{isRtl ? "قيد الانتظار" : "Pending"}</span>
+                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500 dark:bg-yellow-400 inline-block"></span>{isRtl ? "قيد الانتظار" : "Pending"}</span>
                                             </SelectItem>
                                             <SelectItem value={PrintStatus.READY}>
-                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>{isRtl ? "جاهز" : "Ready"}</span>
+                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-50 dark:bg-blue-900/20 inline-block"></span>{isRtl ? "جاهز" : "Ready"}</span>
                                             </SelectItem>
                                             <SelectItem value={PrintStatus.PRINTED}>
-                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>{isRtl ? "تمت الطباعة" : "Printed"}</span>
+                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-50 dark:bg-green-900/20 inline-block"></span>{isRtl ? "تمت الطباعة" : "Printed"}</span>
                                             </SelectItem>
                                           </SelectContent>
                                         </Select>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(job.id)} title={t("delete")} className="text-red-600 hover:bg-red-100 hover:text-red-700">
+                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(job.id)} title={t("delete")} className="text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-400 dark:hover:text-red-300">
                                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                         </Button>
                                       </div>
@@ -1860,7 +1862,7 @@ const AdminView: React.FC<AdminViewProps> = ({
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center flex-shrink-0">
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M22.288 5.292A1.2 1.2 0 0021.6 4.8H2.4a1.2 1.2 0 00-.688.492l10.288 7.712 10.288-7.712zM21.6 7.2l-9.6 7.2L2.4 7.2v9.6a1.2 1.2 0 001.2 1.2h16.8a1.2 1.2 0 001.2-1.2V7.2z"/>
                     </svg>
@@ -1874,19 +1876,19 @@ const AdminView: React.FC<AdminViewProps> = ({
               <CardContent className="space-y-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${gmailConnected ? 'bg-green-500' : 'bg-gray-300'}`} />
-                    <span className="text-sm font-medium text-gray-700">
+                    <div className={`w-3 h-3 rounded-full ${gmailConnected ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-300 dark:bg-gray-600'}`} />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                       {gmailConnected
                         ? (isRtl ? `متصل: ${gmailEmail}` : `Connected: ${gmailEmail}`)
                         : (isRtl ? "غير متصل" : "Not connected")}
                     </span>
                     {gmailConnected && gmailPending.length > 0 && (
-                      <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">
+                      <span className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-xs rounded-full font-medium">
                         {gmailPending.length} {isRtl ? "بريد جديد" : "pending"}
                       </span>
                     )}
                     {gmailConnected && gmailLastPolledAt && (
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
                         {isRtl ? "آخر فحص" : "Last checked"}: {formatRelativeTime(gmailLastPolledAt, lang)}
                       </span>
                     )}
@@ -1921,26 +1923,26 @@ const AdminView: React.FC<AdminViewProps> = ({
                 </div>
 
                 {gmailPollResult && (
-                  <div className={`text-sm px-3 py-2 rounded-lg ${gmailPollResult.includes('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                  <div className={`text-sm px-3 py-2 rounded-lg ${gmailPollResult.includes('Error') ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'}`}>
                     {gmailPollResult}
                   </div>
                 )}
 
-                <button type="button" onClick={() => setGmailShowCredentials(!gmailShowCredentials)} className="text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2">
+                <button type="button" onClick={() => setGmailShowCredentials(!gmailShowCredentials)} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-2">
                   {gmailShowCredentials
                     ? (isRtl ? "إخفاء إعدادات OAuth" : "Hide OAuth settings")
                     : (isRtl ? "إظهار إعدادات OAuth" : "Show OAuth settings")}
                 </button>
 
                 {gmailShowCredentials && (
-                  <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Google Client ID</label>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Google Client ID</label>
                         <Input value={gmailClientId} onChange={(e) => setGmailClientId(e.target.value)} placeholder="xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com" />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Google Client Secret</label>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Google Client Secret</label>
                         <Input value={gmailClientSecret} onChange={(e) => setGmailClientSecret(e.target.value)} placeholder={gmailHasSecret ? "•••••••• (saved)" : "GOCSPX-xxxxxxxxxxxxxxxxxxxx"} />
                       </div>
                     </div>
@@ -1953,16 +1955,16 @@ const AdminView: React.FC<AdminViewProps> = ({
                 )}
 
                 {/* Auto-reply Template */}
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     {isRtl ? "قالب الرد التلقائي" : "Auto-reply Template"}
                   </h4>
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     {isRtl
                       ? "يمكنك استخدام: {shopName}, {fileName}, {fileCount}, {estimatedPrice}"
                       : "Available placeholders: {shopName}, {fileName}, {fileCount}, {estimatedPrice}"}
                   </p>
-                  <textarea value={gmailReplyTemplate} onChange={(e) => setGmailReplyTemplate(e.target.value)} rows={4} className="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none" placeholder={isRtl ? "اكتب قالب الرد هنا..." : "Write your reply template here..."} />
+                  <textarea value={gmailReplyTemplate} onChange={(e) => setGmailReplyTemplate(e.target.value)} rows={4} className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg p-2 resize-none" placeholder={isRtl ? "اكتب قالب الرد هنا..." : "Write your reply template here..."} />
                   <div className="flex justify-end mt-2">
                     <Button size="sm" variant="outline" onClick={handleSaveReplyTemplate}>
                       {isRtl ? "حفظ القالب" : "Save Template"}
@@ -1972,31 +1974,31 @@ const AdminView: React.FC<AdminViewProps> = ({
 
                 {gmailConnected && gmailFilteredPending.length > 0 && (
                   <>
-                    <hr className="border-gray-200" />
-                    <div className="border border-gray-100 rounded-xl max-h-[600px] overflow-y-auto">
+                    <hr className="border-gray-200 dark:border-gray-700" />
+                    <div className="border border-gray-100 dark:border-gray-800 rounded-xl max-h-[600px] overflow-y-auto">
                       {/* Filter bar */}
-                      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 p-3 space-y-2">
+                      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-800 p-3 space-y-2">
                         <div className="flex items-center justify-between flex-wrap gap-2">
-                          <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                          <h4 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                             {isRtl ? "رسائل بريد إلكتروني جديدة" : "New Emails"}
-                            <button type="button" onClick={handleGmailPoll} disabled={gmailPolling} className="inline-flex items-center justify-center w-6 h-6 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50" title={isRtl ? "تحديث" : "Refresh"}>
+                            <button type="button" onClick={handleGmailPoll} disabled={gmailPolling} className="inline-flex items-center justify-center w-6 h-6 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors disabled:opacity-50" title={isRtl ? "تحديث" : "Refresh"}>
                               <svg className={`w-4 h-4 ${gmailPolling ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                             </button>
                           </h4>
-                          <span className="text-xs text-gray-400">{gmailFilteredPending.length} {isRtl ? "نتيجة" : "result(s)"}</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">{gmailFilteredPending.length} {isRtl ? "نتيجة" : "result(s)"}</span>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <Input value={gmailFilterText} onChange={e => setGmailFilterText(e.target.value)} placeholder={isRtl ? "بحث بالمرسل أو الموضوع..." : "Search sender or subject..."} className="h-8 text-sm min-w-[180px] flex-1" />
                           <div className="flex items-center gap-1">
                             {(["all", "today", "week"] as const).map(d => (
-                              <button key={d} type="button" onClick={() => setGmailFilterDate(d)} className={`px-2 py-1 text-xs rounded-lg ${gmailFilterDate === d ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                              <button key={d} type="button" onClick={() => setGmailFilterDate(d)} className={`px-2 py-1 text-xs rounded-lg ${gmailFilterDate === d ? 'bg-gray-900 dark:bg-gray-950 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
                                 {d === "all" ? (isRtl ? "الكل" : "All") : d === "today" ? (isRtl ? "اليوم" : "Today") : (isRtl ? "7 أيام" : "7 days")}
                               </button>
                             ))}
                           </div>
                           <div className="flex items-center gap-1">
                             {(["all", "pdf", "images", "other"] as const).map(t => (
-                              <button key={t} type="button" onClick={() => setGmailFilterType(t)} className={`px-2 py-1 text-xs rounded-lg ${gmailFilterType === t ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                              <button key={t} type="button" onClick={() => setGmailFilterType(t)} className={`px-2 py-1 text-xs rounded-lg ${gmailFilterType === t ? 'bg-gray-900 dark:bg-gray-950 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
                                 {t === "all" ? (isRtl ? "الكل" : "All") : t === "pdf" ? "PDF" : t === "images" ? (isRtl ? "صور" : "Images") : (isRtl ? "أخرى" : "Other")}
                               </button>
                             ))}
@@ -2014,43 +2016,43 @@ const AdminView: React.FC<AdminViewProps> = ({
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="bg-gray-50 border-b border-gray-100">
+                            <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
                               <th className="p-3 text-left">
-                                <input type="checkbox" checked={gmailFilteredPending.length > 0 && gmailFilteredPending.every(e => gmailSelectedIds.has(e.id))} onChange={toggleGmailFilteredSelectAll} className="rounded border-gray-300" />
+                                <input type="checkbox" checked={gmailFilteredPending.length > 0 && gmailFilteredPending.every(e => gmailSelectedIds.has(e.id))} onChange={toggleGmailFilteredSelectAll} className="rounded border-gray-300 dark:border-gray-600" />
                               </th>
-                              <th className="p-3 text-left font-semibold text-gray-600">{isRtl ? "من" : "From"}</th>
-                              <th className="p-3 text-left font-semibold text-gray-600">{isRtl ? "الموضوع" : "Subject"}</th>
-                              <th className="p-3 text-left font-semibold text-gray-600">{isRtl ? "المرفقات" : "Attachments"}</th>
-                              <th className="p-3 text-left font-semibold text-gray-600">{isRtl ? "التاريخ" : "Date"}</th>
+                              <th className="p-3 text-left font-semibold text-gray-600 dark:text-gray-300 dark:text-gray-500">{isRtl ? "من" : "From"}</th>
+                              <th className="p-3 text-left font-semibold text-gray-600 dark:text-gray-300 dark:text-gray-500">{isRtl ? "الموضوع" : "Subject"}</th>
+                              <th className="p-3 text-left font-semibold text-gray-600 dark:text-gray-300 dark:text-gray-500">{isRtl ? "المرفقات" : "Attachments"}</th>
+                              <th className="p-3 text-left font-semibold text-gray-600 dark:text-gray-300 dark:text-gray-500">{isRtl ? "التاريخ" : "Date"}</th>
                             </tr>
                           </thead>
                           <tbody>
                             {gmailFilteredPending.map((email) => (
-                              <tr key={email.id} onClick={() => toggleGmailSelection(email.id)} className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50/50 ${gmailSelectedIds.has(email.id) ? 'bg-blue-50/30' : ''}`}>
+                              <tr key={email.id} onClick={() => toggleGmailSelection(email.id)} className={`cursor-pointer border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 ${gmailSelectedIds.has(email.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                                 <td className="p-3">
-                                  <input type="checkbox" checked={gmailSelectedIds.has(email.id)} onChange={(e) => { e.stopPropagation(); toggleGmailSelection(email.id); }} className="rounded border-gray-300" />
+                                  <input type="checkbox" checked={gmailSelectedIds.has(email.id)} onChange={(e) => { e.stopPropagation(); toggleGmailSelection(email.id); }} className="rounded border-gray-300 dark:border-gray-600" />
                                 </td>
                                 <td className="p-3">
-                                  <div className="font-medium text-gray-900">{email.email_from}</div>
-                                  <div className="text-xs text-gray-500">{email.email_address}</div>
+                                  <div className="font-medium text-gray-900 dark:text-gray-100">{email.email_from}</div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">{email.email_address}</div>
                                 </td>
-                                <td className="p-3 text-gray-700 max-w-xs truncate">{email.subject}</td>
+                                <td className="p-3 text-gray-700 dark:text-gray-200 max-w-xs truncate">{email.subject}</td>
                                 <td className="p-3">
                                   {email.attachment_meta && email.attachment_meta.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
                                       {email.attachment_meta.map((att, i) => (
-                                        <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs flex items-center gap-1" title={`${att.filename} (${formatFileSize(att.size)})`}>
+                                        <span key={i} className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 dark:text-gray-500 rounded text-xs flex items-center gap-1" title={`${att.filename} (${formatFileSize(att.size)})`}>
                                           <span>{getFileTypeIcon(att.mimeType)}</span>
                                           <span className="max-w-[80px] truncate">{att.filename}</span>
-                                          {att.size > 0 && <span className="text-gray-400">({formatFileSize(att.size)})</span>}
+                                          {att.size > 0 && <span className="text-gray-400 dark:text-gray-500">({formatFileSize(att.size)})</span>}
                                         </span>
                                       ))}
                                     </div>
                                   ) : (
-                                    <span className="text-gray-400 text-xs">{isRtl ? "لا يوجد" : "None"}</span>
+                                    <span className="text-gray-400 dark:text-gray-500 text-xs">{isRtl ? "لا يوجد" : "None"}</span>
                                   )}
                                 </td>
-                                <td className="p-3 text-gray-500 text-xs">{email.fetched_at ? new Date(email.fetched_at).toLocaleString() : ''}</td>
+                                <td className="p-3 text-gray-500 dark:text-gray-400 text-xs">{email.fetched_at ? new Date(email.fetched_at).toLocaleString() : ''}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -2071,33 +2073,33 @@ const AdminView: React.FC<AdminViewProps> = ({
                 </DialogHeader>
                 <div className="space-y-4">
                   {gmailSelectedEmails.map(email => (
-                    <div key={email.id} className="border border-gray-200 rounded-xl p-4">
-                      <div className="font-semibold text-gray-900 mb-1">{email.subject || '(no subject)'}</div>
-                      <div className="text-xs text-gray-500 mb-3">{email.email_from} &lt;{email.email_address}&gt;</div>
+                    <div key={email.id} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{email.subject || '(no subject)'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">{email.email_from} &lt;{email.email_address}&gt;</div>
                       {(email.attachment_meta || []).length === 0 ? (
-                        <div className="text-sm text-gray-400 italic">{isRtl ? "لا توجد مرفقات" : "No attachments"}</div>
+                        <div className="text-sm text-gray-400 dark:text-gray-500 italic">{isRtl ? "لا توجد مرفقات" : "No attachments"}</div>
                       ) : (
                         <div className="space-y-2">
                           {email.attachment_meta.map((att: any, i: number) => {
                             const key = `${email.id}_${i}`;
                             const ov = gmailReviewOverrides[key] || { copies: 1, colorMode: 'color', paperType: 'normal' };
                             return (
-                              <div key={i} className="flex flex-wrap items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                                <span className="text-sm font-medium text-gray-700 min-w-[120px] truncate">{att.filename}</span>
+                              <div key={i} className="flex flex-wrap items-center gap-3 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[120px] truncate">{att.filename}</span>
                                 <div className="flex items-center gap-2">
-                                  <label className="text-xs text-gray-500">{isRtl ? "نسخ" : "Copies"}</label>
+                                  <label className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "نسخ" : "Copies"}</label>
                                   <Input type="number" min={1} max={99} value={ov.copies} onChange={e => updateGmailOverride(key, 'copies', parseInt(e.target.value) || 1)} className="w-16 h-8 text-sm" />
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <label className="text-xs text-gray-500">{isRtl ? "الألوان" : "Color"}</label>
-                                  <select value={ov.colorMode} onChange={e => updateGmailOverride(key, 'colorMode', e.target.value)} className="text-sm border border-gray-300 rounded-lg px-2 py-1 h-8">
+                                  <label className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "الألوان" : "Color"}</label>
+                                  <select value={ov.colorMode} onChange={e => updateGmailOverride(key, 'colorMode', e.target.value)} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 h-8">
                                     <option value="color">{isRtl ? "ملون" : "Color"}</option>
                                     <option value="blackWhite">{isRtl ? "أبيض وأسود" : "B&W"}</option>
                                   </select>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <label className="text-xs text-gray-500">{isRtl ? "الورق" : "Paper"}</label>
-                                  <select value={ov.paperType} onChange={e => updateGmailOverride(key, 'paperType', e.target.value)} className="text-sm border border-gray-300 rounded-lg px-2 py-1 h-8">
+                                  <label className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "الورق" : "Paper"}</label>
+                                  <select value={ov.paperType} onChange={e => updateGmailOverride(key, 'paperType', e.target.value)} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 h-8">
                                     {paperTypes.map(pt => (
                                       <option key={pt.id} value={pt.id}>{isRtl ? (pt.nameAr || pt.name) : pt.name}</option>
                                     ))}
@@ -2122,23 +2124,23 @@ const AdminView: React.FC<AdminViewProps> = ({
           <div className="max-w-5xl mx-auto">
             {/* Page Header */}
             <div className="mb-8">
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">
                 {isRtl ? "إعدادات المحل" : "Shop Settings"}
               </h2>
-              <p className="text-gray-600 mt-1 text-sm sm:text-base">
+              <p className="text-gray-600 dark:text-gray-300 mt-1 text-sm sm:text-base">
                 {isRtl
                   ? "إدارة إعدادات المحل والتسعير"
                   : "Manage your shop configuration and pricing"}
               </p>
             </div>
 
-            {/* Settings Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            {/* Settings Grid — all cards sit in one grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Shop Info Card */}
-              <Card>
+              <Card className="border-0">
                 <CardHeader>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                       </svg>
@@ -2151,26 +2153,26 @@ const AdminView: React.FC<AdminViewProps> = ({
                 </CardHeader>
                 <CardContent className="space-y-5">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">{t("shopName")}</label>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{t("shopName")}</label>
                     <Input value={shopName} onChange={(e) => setShopName(e.target.value)} placeholder={isRtl ? "اسم المحل" : "Print Shop Name"} />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">{t("shopLogo")}</label>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{t("shopLogo")}</label>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                       {logoUrl ? (
-                        <div className="w-20 h-20 rounded-xl border-2 border-white shadow-md overflow-hidden bg-gray-100 flex-shrink-0">
-                          <img src={logoUrl} alt="Logo Preview" className="w-full h-full object-contain" />
+                        <div className="w-20 h-20 rounded-xl border-2 border-white dark:border-gray-700 shadow-md dark:shadow-gray-800/50 overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+                          <img src={logoUrl} alt="Logo Preview" className="w-full h-full object-cover" />
                         </div>
                       ) : (
-                        <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center flex-shrink-0">
-                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </div>
                       )}
                       <div className="flex-1 w-full">
-                        <Input type="file" accept="image/*" onChange={handleLogoUpload} className="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 file:cursor-pointer cursor-pointer" />
-                        <p className="text-xs text-gray-400 mt-2">{isRtl ? "PNG, JPG أو GIF (الحد الأقصى 2MB)" : "PNG, JPG or GIF (max 2MB)"}</p>
+                        <Input type="file" accept="image/*" onChange={handleLogoUpload} className="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/30 file:text-indigo-600 dark:file:text-indigo-400 file:hover:bg-indigo-100 dark:file:hover:bg-indigo-900/50 file:cursor-pointer cursor-pointer" />
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">{isRtl ? "PNG, JPG أو GIF (الحد الأقصى 2MB)" : "PNG, JPG or GIF (max 2MB)"}</p>
                       </div>
                     </div>
                   </div>
@@ -2178,10 +2180,10 @@ const AdminView: React.FC<AdminViewProps> = ({
               </Card>
 
               {/* Pricing Card */}
-              <Card>
+              <Card className="border-0">
                 <CardHeader>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center flex-shrink-0">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
@@ -2194,7 +2196,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-semibold text-gray-700">
+                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">
                       {isRtl ? "أنواع الورق وأسعارها" : "Paper Types & Pricing"}
                     </label>
                     <Button size="sm" onClick={() => { setShowAddPaperTypeForm(true); setEditingPaperTypeId(null); }}>
@@ -2203,19 +2205,19 @@ const AdminView: React.FC<AdminViewProps> = ({
                     </Button>
                   </div>
 
-                  <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                  <div className="overflow-x-auto rounded-xl">
                     <table className="w-full text-sm min-w-[400px]">
                       <thead>
-                        <tr className="bg-gray-50 border-b border-gray-100">
-                          <th className={`px-3 py-2.5 text-xs font-semibold text-gray-500 ${isRtl ? "text-right" : "text-left"}`}>{isRtl ? "نوع الورق" : "Paper Type"}</th>
-                          <th className={`px-3 py-2.5 text-xs font-semibold text-gray-500 ${isRtl ? "text-right" : "text-left"}`}>{isRtl ? "ملون" : "Color"}</th>
-                          <th className={`px-3 py-2.5 text-xs font-semibold text-gray-500 ${isRtl ? "text-right" : "text-left"}`}>{isRtl ? "أبيض/أسود" : "B&W"}</th>
+                        <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
+                          <th className={`px-3 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 ${isRtl ? "text-right" : "text-left"}`}>{isRtl ? "نوع الورق" : "Paper Type"}</th>
+                          <th className={`px-3 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 ${isRtl ? "text-right" : "text-left"}`}>{isRtl ? "ملون" : "Color"}</th>
+                          <th className={`px-3 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 ${isRtl ? "text-right" : "text-left"}`}>{isRtl ? "أبيض/أسود" : "B&W"}</th>
                           <th className="px-3 py-2.5 w-16"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {paperTypes.map((pt, idx) => (
-                          <tr key={pt.id} className={idx < paperTypes.length - 1 ? "border-b border-gray-100" : ""}>
+                          <tr key={pt.id} className={idx < paperTypes.length - 1 ? "border-b border-gray-100 dark:border-gray-800" : ""}>
                             {editingPaperTypeId === pt.id && editingPaperTypeForm ? (
                               <>
                                 <td className="px-3 py-2">
@@ -2238,16 +2240,16 @@ const AdminView: React.FC<AdminViewProps> = ({
                             ) : (
                               <>
                                 <td className="px-3 py-3">
-                                  <div className="font-semibold text-gray-900 text-sm">{isRtl ? pt.nameAr : pt.name}</div>
-                                  <div className="text-xs text-gray-400">{isRtl ? pt.name : pt.nameAr}</div>
+                                  <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{isRtl ? pt.nameAr : pt.name}</div>
+                                  <div className="text-xs text-gray-400 dark:text-gray-500">{isRtl ? pt.name : pt.nameAr}</div>
                                 </td>
                                 <td className="px-3 py-3">
-                                  <span className="font-semibold text-indigo-700">{pt.colorPerPage}</span>
-                                  <span className="text-xs text-gray-400 ml-1">DZD</span>
+                                  <span className="font-semibold text-indigo-700 dark:text-indigo-400">{pt.colorPerPage}</span>
+                                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">DZD</span>
                                 </td>
                                 <td className="px-3 py-3">
-                                  <span className="font-semibold text-gray-700">{pt.blackWhitePerPage}</span>
-                                  <span className="text-xs text-gray-400 ml-1">DZD</span>
+                                  <span className="font-semibold text-gray-700 dark:text-gray-200">{pt.blackWhitePerPage}</span>
+                                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">DZD</span>
                                 </td>
                                 <td className="px-3 py-3">
                                   <div className="flex gap-1">
@@ -2277,7 +2279,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                       </DialogHeader>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">{isRtl ? "الاسم (EN)" : "Name (EN)"}</label>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1.5">{isRtl ? "الاسم (EN)" : "Name (EN)"}</label>
                           <Input
                             value={newPaperTypeForm.name}
                             onChange={e => setNewPaperTypeForm({ ...newPaperTypeForm, name: e.target.value })}
@@ -2285,7 +2287,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">{isRtl ? "الاسم (AR)" : "Name (AR)"}</label>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1.5">{isRtl ? "الاسم (AR)" : "Name (AR)"}</label>
                           <Input
                             value={newPaperTypeForm.nameAr}
                             onChange={e => setNewPaperTypeForm({ ...newPaperTypeForm, nameAr: e.target.value })}
@@ -2293,7 +2295,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">{isRtl ? "سعر ملون (DZD)" : "Color (DZD)"}</label>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1.5">{isRtl ? "سعر ملون (DZD)" : "Color (DZD)"}</label>
                           <Input
                             type="number"
                             min="0"
@@ -2303,7 +2305,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">{isRtl ? "سعر أبيض/أسود (DZD)" : "B&W (DZD)"}</label>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1.5">{isRtl ? "سعر أبيض/أسود (DZD)" : "B&W (DZD)"}</label>
                           <Input
                             type="number"
                             min="0"
@@ -2325,13 +2327,12 @@ const AdminView: React.FC<AdminViewProps> = ({
                   </Dialog>
                 </CardContent>
               </Card>
-            </div>
 
-            {/* Password Change Card */}
-            <Card className="lg:col-span-2">
+              {/* Password Change Card — full width */}
+              <Card className="lg:col-span-2 border-0">
               <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center flex-shrink-0">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                     </svg>
@@ -2345,7 +2346,7 @@ const AdminView: React.FC<AdminViewProps> = ({
               <form onSubmit={handleChangePassword} className="p-5 sm:p-6 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">{isRtl ? "كلمة المرور الحالية" : "Current Password"}</label>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{isRtl ? "كلمة المرور الحالية" : "Current Password"}</label>
                     <div className="relative">
                       <Input type={showPasswords.current ? "text" : "password"} value={passwordForm.current} onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })} placeholder="••••••••" required className="pr-10" />
                       <Button type="button" variant="ghost" size="icon" onClick={() => setShowPasswords(p => ({ ...p, current: !p.current }))} className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" tabIndex={-1}>
@@ -2354,7 +2355,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">{isRtl ? "كلمة المرور الجديدة" : "New Password"}</label>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{isRtl ? "كلمة المرور الجديدة" : "New Password"}</label>
                     <div className="relative">
                       <Input type={showPasswords.newPass ? "text" : "password"} value={passwordForm.newPass} onChange={(e) => setPasswordForm({ ...passwordForm, newPass: e.target.value })} placeholder="••••••••" required className="pr-10" />
                       <Button type="button" variant="ghost" size="icon" onClick={() => setShowPasswords(p => ({ ...p, newPass: !p.newPass }))} className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" tabIndex={-1}>
@@ -2363,7 +2364,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">{isRtl ? "تأكيد كلمة المرور" : "Confirm Password"}</label>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{isRtl ? "تأكيد كلمة المرور" : "Confirm Password"}</label>
                     <div className="relative">
                       <Input type={showPasswords.confirm ? "text" : "password"} value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })} placeholder="••••••••" required className="pr-10" />
                       <Button type="button" variant="ghost" size="icon" onClick={() => setShowPasswords(p => ({ ...p, confirm: !p.confirm }))} className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" tabIndex={-1}>
@@ -2372,17 +2373,17 @@ const AdminView: React.FC<AdminViewProps> = ({
                     </div>
                   </div>
                 </div>
-                {passwordError && <p className="text-sm text-red-600 font-medium">{passwordError}</p>}
-                {passwordSuccess && <p className="text-sm text-green-600 font-medium">{isRtl ? "✓ تم تغيير كلمة المرور بنجاح" : "✓ Password changed successfully"}</p>}
+                {passwordError && <p className="text-sm text-red-600 dark:text-red-400 font-medium">{passwordError}</p>}
+                {passwordSuccess && <p className="text-sm text-green-600 dark:text-green-400 font-medium">{isRtl ? "✓ تم تغيير كلمة المرور بنجاح" : "✓ Password changed successfully"}</p>}
                 <Button type="submit" variant="destructive">{isRtl ? "تغيير كلمة المرور" : "Change Password"}</Button>
               </form>
             </Card>
 
             {/* Discount Rules Card - Full Width */}
-            <Card className="lg:col-span-2">
+            <Card className="lg:col-span-2 border-0">
               <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                     </svg>
@@ -2402,8 +2403,8 @@ const AdminView: React.FC<AdminViewProps> = ({
 
               <CardContent>
                 {discountRules.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <svg className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <p>{isRtl ? "لا توجد قواعد خصم بعد" : "No discount rules yet"}</p>
@@ -2418,8 +2419,8 @@ const AdminView: React.FC<AdminViewProps> = ({
                         key={rule.id}
                         className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
                           rule.is_active
-                            ? "bg-white border-gray-200"
-                            : "bg-gray-50 border-gray-100 opacity-60"
+                            ? "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                            : "bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800 opacity-60"
                         }`}
                       >
                         <div className="flex items-center gap-4">
@@ -2427,11 +2428,11 @@ const AdminView: React.FC<AdminViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleToggleRuleActive(rule)}
-                            className={`relative w-12 h-6 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500/40 ${
-                              rule.is_active ? "bg-purple-600" : "bg-gray-300"
+                            className={`relative w-12 h-6 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:focus:ring-purple-400/40 ${
+                              rule.is_active ? "bg-purple-600 dark:bg-purple-500" : "bg-gray-300 dark:bg-gray-600"
                             }`}
                           >
-                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-300 ${
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white dark:bg-gray-800 shadow-md dark:shadow-gray-800/50 transition-all duration-300 ${
                               isRtl
                                 ? (rule.is_active ? "right-[1.625rem]" : "right-0.5")
                                 : (rule.is_active ? "left-[1.625rem]" : "left-0.5")
@@ -2440,14 +2441,14 @@ const AdminView: React.FC<AdminViewProps> = ({
 
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-900">{rule.name}</span>
+                              <span className="font-semibold text-gray-900 dark:text-gray-100">{rule.name}</span>
                               {rule.priority > 0 && (
-                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">
+                                <span className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-xs rounded-full font-medium">
                                   P{rule.priority}
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm text-gray-500 mt-0.5">
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                               {rule.discount_type === "percent"
                                 ? `${rule.discount_value}% ${isRtl ? "خصم" : "off"}`
                                 : `${rule.discount_value} DZD ${isRtl ? "خصم" : "off"}`}
@@ -2480,10 +2481,10 @@ const AdminView: React.FC<AdminViewProps> = ({
             </Card>
 
             {/* Backup & Restore Card */}
-            <Card className="lg:col-span-2">
+            <Card className="lg:col-span-2 border-0">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 dark:text-gray-500 flex items-center justify-center flex-shrink-0">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
                     </svg>
@@ -2505,7 +2506,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                     {t("restoreBackup")}
                   </Button>
                 </div>
-                <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
                   <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
                   {t("restoreWarning")}
                 </p>
@@ -2522,7 +2523,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                 <div className="space-y-4">
                   <Input type="file" accept=".sqlite,.db" onChange={(e) => setRestoreFile(e.target.files?.[0] || null)} />
                   {restoreFile && (
-                    <p className="text-xs text-gray-500">{restoreFile.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{restoreFile.name}</p>
                   )}
                 </div>
                 <DialogFooter>
@@ -2535,46 +2536,47 @@ const AdminView: React.FC<AdminViewProps> = ({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-4 sm:mt-6">
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-500 mb-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-8">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm dark:shadow-gray-900/50">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                   {isRtl ? "الملفات المعلقة" : "Pending Files"}
                 </div>
-                <div className="text-xl sm:text-2xl font-bold text-yellow-600">
+                <div className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                   {groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PENDING).length, 0)}
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-500 mb-1">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm dark:shadow-gray-900/50">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                   {isRtl ? "جاهز للاستلام" : "Ready Files"}
                 </div>
-                <div className="text-xl sm:text-2xl font-bold text-blue-600">
+                <div className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.READY).length, 0)}
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-500 mb-1">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm dark:shadow-gray-900/50">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                   {isRtl ? "الملفات المطبوعة" : "Printed Files"}
                 </div>
-                <div className="text-xl sm:text-2xl font-bold text-green-600">
+                <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">
                   {groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PRINTED).length, 0)}
                 </div>
               </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-500 mb-1">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm dark:shadow-gray-900/50">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                   {isRtl ? "إجمالي العملاء" : "Total Customers"}
                 </div>
-                <div className="text-xl sm:text-2xl font-bold text-indigo-600">
+                <div className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                   {groups.length}
                 </div>
               </div>
             </div>
 
             {/* Save Button */}
-            <div className="sticky bottom-0 bg-white z-10 pb-4 pt-2 mt-6 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-t border-gray-100">
-              <p className="text-sm text-gray-500">
+            <div className="sticky bottom-0 bg-white dark:bg-gray-800 z-10 -mx-2 px-4 pb-4 pt-3 mt-6 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 rounded-2xl shadow-md dark:shadow-gray-900/30">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 {isRtl
                   ? "سيتم حفظ التغييرات فورًا"
                   : "Changes will be saved immediately"}
@@ -2601,7 +2603,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{isRtl ? "إلغاء" : "Cancel"}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{isRtl ? "حذف" : "Delete"}</AlertDialogAction>
+            <AlertDialogAction onClick={confirmBulkDelete} className="bg-destructive text-destructive-foreground dark:text-destructive-foreground hover:bg-destructive/90 dark:hover:bg-destructive/70">{isRtl ? "حذف" : "Delete"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -2625,7 +2627,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                   size="sm"
                   onClick={() => setPaymentEditStatus(s)}
                   className={paymentEditStatus === s ? (
-                    s === PaymentStatus.PAID ? "bg-green-600" : s === PaymentStatus.PARTIAL ? "bg-amber-600" : "bg-red-600"
+                    s === PaymentStatus.PAID ? "bg-green-600 dark:bg-green-500" : s === PaymentStatus.PARTIAL ? "bg-amber-600 dark:bg-amber-500" : "bg-red-600 dark:bg-red-500"
                   ) : ""}
                 >
                   {s === PaymentStatus.PAID ? t("paid") : s === PaymentStatus.PARTIAL ? t("partial") : t("unpaid")}
@@ -2633,7 +2635,7 @@ const AdminView: React.FC<AdminViewProps> = ({
               ))}
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">{t("paymentAmount")} (DZD)</label>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{t("paymentAmount")} (DZD)</label>
               <Input
                 type="number"
                 min="0"
@@ -2663,7 +2665,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{isRtl ? "إلغاء" : "Cancel"}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmGmailDisconnect} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={confirmGmailDisconnect} className="bg-destructive text-destructive-foreground dark:text-destructive-foreground hover:bg-destructive/90 dark:hover:bg-destructive/70">
               {isRtl ? "قطع الاتصال" : "Disconnect"}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -2681,7 +2683,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{isRtl ? "إلغاء" : "Cancel"}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmSingleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{isRtl ? "حذف" : "Delete"}</AlertDialogAction>
+            <AlertDialogAction onClick={confirmSingleDelete} className="bg-destructive text-destructive-foreground dark:text-destructive-foreground hover:bg-destructive/90 dark:hover:bg-destructive/70">{isRtl ? "حذف" : "Delete"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -2697,7 +2699,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{isRtl ? "إلغاء" : "Cancel"}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteRule} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{isRtl ? "حذف" : "Delete"}</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDeleteRule} className="bg-destructive text-destructive-foreground dark:text-destructive-foreground hover:bg-destructive/90 dark:hover:bg-destructive/70">{isRtl ? "حذف" : "Delete"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -2719,7 +2721,7 @@ const AdminView: React.FC<AdminViewProps> = ({
     <div className="space-y-5">
       {/* Rule Name */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {isRtl ? "اسم القاعدة" : "Rule Name"} *
         </label>
         <Input
@@ -2731,7 +2733,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
       {/* Discount Type */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {isRtl ? "نوع الخصم" : "Discount Type"}
         </label>
         <div className="grid grid-cols-2 gap-3">
@@ -2754,7 +2756,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
       {/* Discount Value */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {ruleFormData.discount_type === "percent"
             ? (isRtl ? "نسبة الخصم" : "Discount Percentage")
             : (isRtl ? "مبلغ الخصم" : "Discount Amount")}
@@ -2769,7 +2771,7 @@ const AdminView: React.FC<AdminViewProps> = ({
             placeholder={ruleFormData.discount_type === "percent" ? (isRtl ? "مثال: 10" : "e.g. 10") : (isRtl ? "مثال: 50" : "e.g. 50")}
             className={isRtl ? "pl-16 pr-4" : "pr-16 pl-4"}
           />
-          <span className={`absolute ${isRtl ? "left-4" : "right-4"} top-1/2 -translate-y-1/2 text-gray-400 font-semibold pointer-events-none`}>
+          <span className={`absolute ${isRtl ? "left-4" : "right-4"} top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-semibold pointer-events-none`}>
             {ruleFormData.discount_type === "percent" ? "%" : "DZD"}
           </span>
         </div>
@@ -2777,7 +2779,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
       {/* Condition Type */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {isRtl ? "الشرط" : "Condition"}
         </label>
         <div className="grid grid-cols-2 gap-3">
@@ -2800,7 +2802,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
       {/* Threshold */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {ruleFormData.condition_type === "pages"
             ? (isRtl ? "الحد الأدنى للصفحات" : "Minimum Pages")
             : (isRtl ? "الحد الأدنى للمبلغ" : "Minimum Amount")}
@@ -2813,7 +2815,7 @@ const AdminView: React.FC<AdminViewProps> = ({
             onChange={(e) => setRuleFormData({ ...ruleFormData, threshold: parseInt(e.target.value) })}
             className={isRtl ? "pl-20 pr-4" : "pr-20 pl-4"}
           />
-          <span className={`absolute ${isRtl ? "left-4" : "right-4"} top-1/2 -translate-y-1/2 text-gray-400 font-semibold pointer-events-none`}>
+          <span className={`absolute ${isRtl ? "left-4" : "right-4"} top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-semibold pointer-events-none`}>
             {ruleFormData.condition_type === "pages"
               ? (isRtl ? "صفحة" : "pages")
               : "DZD"}
@@ -2823,7 +2825,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
       {/* Max Cap (Optional) */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {isRtl ? "الحد الأقصى للخصم (اختياري)" : "Max Discount Cap (Optional)"}
         </label>
         <div className="relative">
@@ -2836,7 +2838,7 @@ const AdminView: React.FC<AdminViewProps> = ({
             placeholder={isRtl ? "بدون حد أقصى" : "No cap"}
             className={isRtl ? "pl-16 pr-4" : "pr-16 pl-4"}
           />
-          <span className={`absolute ${isRtl ? "left-4" : "right-4"} top-1/2 -translate-y-1/2 text-gray-400 font-semibold pointer-events-none`}>
+          <span className={`absolute ${isRtl ? "left-4" : "right-4"} top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-semibold pointer-events-none`}>
             DZD
           </span>
         </div>
@@ -2844,7 +2846,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
       {/* Priority */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {isRtl ? "الأولوية" : "Priority"}
         </label>
         <Input
@@ -2853,7 +2855,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           value={ruleFormData.priority || 0}
           onChange={(e) => setRuleFormData({ ...ruleFormData, priority: parseInt(e.target.value) || 0 })}
         />
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
           {isRtl ? "أرقام أعلى = أولوية أعلى" : "Higher numbers = higher priority"}
         </p>
       </div>

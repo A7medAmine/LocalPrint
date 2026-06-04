@@ -201,7 +201,7 @@ function applyClarity(data: ImageData, w: number, h: number, strength: number): 
   return data;
 }
 
-const RANGE_SLIDER_CLASS = "w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-indigo-600";
+const RANGE_SLIDER_CLASS = "w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full appearance-none cursor-pointer accent-indigo-600";
 
 const ImageEditor: React.FC<ImageEditorProps> = ({
   imageBlob,
@@ -731,7 +731,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     step?: number,
   ) => (
     <div>
-      <div className="flex justify-between text-xs text-gray-500 mb-1">
+      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
         <span>{label}</span>
         <span className="font-mono font-bold">{filters[key]}{unit}</span>
       </div>
@@ -749,23 +749,23 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-0">
-      <div className="bg-white w-full h-full max-w-[98vw] max-h-[98vh] overflow-hidden flex flex-col shadow-2xl relative rounded-none md:rounded-2xl">
+      <div className="bg-white dark:bg-gray-900 w-full h-full max-w-[98vw] max-h-[98vh] overflow-hidden flex flex-col shadow-2xl dark:shadow-gray-900/80 relative rounded-none md:rounded-2xl">
         {showConfirm && (
           <div className="absolute inset-0 z-[110] bg-black/50 flex items-center justify-center backdrop-blur-sm p-4 text-center">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full">
-              <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl dark:shadow-gray-900/60 max-w-sm w-full">
+              <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
               </div>
               <h4 className="text-xl font-bold mb-2">
                 {isRtl ? "تأكيد الحفظ؟" : "Confirm Save?"}
               </h4>
-              <p className="text-gray-600 mb-6 text-sm">
+              <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
                 {isRtl
                   ? "سيتم استبدال الملف الأصلي بهذا التعديل بشكل دائم."
                   : "The original file will be permanently replaced with this edit."}
               </p>
               <div className="flex gap-3">
-                <button onClick={() => setShowConfirm(false)} className="flex-1 px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-xl transition">{t("cancel")}</button>
+                <button onClick={() => setShowConfirm(false)} className="flex-1 px-4 py-2 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition">{t("cancel")}</button>
                 <button onClick={confirmSave} className="flex-1 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg">{t("save")}</button>
               </div>
             </div>
@@ -773,47 +773,47 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
         )}
 
         {/* Header */}
-        <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-2 shrink-0">
+        <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/80 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-sm hidden sm:block">{t("edit")}</h3>
-            <div className="flex bg-white rounded-lg p-0.5 shadow-sm border border-gray-200">
-              <button onClick={() => setMode("edit")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "edit" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{t("edit")}</button>
-              <button onClick={() => setMode("crop")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "crop" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{t("normalCrop")}</button>
-              <button onClick={() => setMode("perspective")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "perspective" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>{t("perspectiveCut")}</button>
+            <div className="flex bg-white dark:bg-gray-800 rounded-lg p-0.5 shadow-sm border border-gray-200 dark:border-gray-600">
+              <button onClick={() => setMode("edit")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "edit" ? "bg-indigo-600 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>{t("edit")}</button>
+              <button onClick={() => setMode("crop")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "crop" ? "bg-indigo-600 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>{t("normalCrop")}</button>
+              <button onClick={() => setMode("perspective")} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition ${mode === "perspective" ? "bg-indigo-600 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>{t("perspectiveCut")}</button>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-white rounded-lg p-0.5 shadow-sm border border-gray-200">
-            <button onClick={() => setZoom((prev) => Math.max(0.5, prev - 0.25))} className="p-1 hover:bg-gray-100 rounded text-gray-600" title="Zoom Out">
+          <div className="flex items-center gap-1.5 bg-white dark:bg-gray-800 rounded-lg p-0.5 shadow-sm border border-gray-200 dark:border-gray-600">
+            <button onClick={() => setZoom((prev) => Math.max(0.5, prev - 0.25))} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400" title="Zoom Out">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"></path></svg>
             </button>
-            <span className="text-[11px] font-bold text-gray-500 min-w-[3rem] text-center">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom((prev) => Math.min(5, prev + 0.25))} className="p-1 hover:bg-gray-100 rounded text-gray-600" title="Zoom In">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 min-w-[3rem] text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom((prev) => Math.min(5, prev + 0.25))} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400" title="Zoom In">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
             </button>
-            <div className="w-px h-3 bg-gray-200 mx-0.5" />
-            <button onClick={() => setZoom(1)} className="px-1.5 py-0.5 hover:bg-gray-100 rounded text-[10px] font-bold text-indigo-600 uppercase">{isRtl ? "إعادة" : "Reset"}</button>
+            <div className="w-px h-3 bg-gray-200 dark:bg-gray-600 mx-0.5" />
+            <button onClick={() => setZoom(1)} className="px-1.5 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">{isRtl ? "إعادة" : "Reset"}</button>
           </div>
         </div>
 
         {/* Body */}
         <div className="flex flex-1 overflow-hidden">
-          <div ref={containerRef} onWheel={handleWheel} className="flex-1 overflow-auto bg-gray-900/50 flex items-center justify-center p-2">
-            <div className="relative shadow-2xl bg-white/5 inline-block">
+          <div ref={containerRef} onWheel={handleWheel} className="flex-1 overflow-auto bg-gray-900/50 dark:bg-black/80 flex items-center justify-center p-2">
+            <div className="relative shadow-2xl bg-white/5 dark:bg-white/10 inline-block">
               <canvas
                 ref={canvasRef}
                 onMouseDown={handleMouseDown}
-                className="cursor-crosshair bg-white"
+                className="cursor-crosshair bg-white dark:bg-gray-800"
                 style={{ maxWidth: "none" }}
               />
             </div>
           </div>
 
           {/* Right sidebar */}
-          <div className="w-64 border-l border-gray-100 bg-gray-50/30 flex flex-col overflow-y-auto shrink-0">
-            <div className="p-3 border-b border-gray-100">
+          <div className="w-64 border-l border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/60 flex flex-col overflow-y-auto shrink-0">
+            <div className="p-3 border-b border-gray-100 dark:border-gray-700">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">{isRtl ? "التأثيرات" : "Effects"}</h4>
+                <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">{isRtl ? "التأثيرات" : "Effects"}</h4>
                 <button onClick={resetFilters} className="text-[10px] text-indigo-600 font-bold hover:underline">{isRtl ? "إعادة تعيين" : "Reset"}</button>
               </div>
               <div className="space-y-2.5">
@@ -827,21 +827,21 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
             </div>
 
             {/* Presets */}
-            <div className="p-3 border-b border-gray-100">
-              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">{isRtl ? "الإعدادات المحفوظة" : "Presets"}</h4>
+            <div className="p-3 border-b border-gray-100 dark:border-gray-700">
+              <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">{isRtl ? "الإعدادات المحفوظة" : "Presets"}</h4>
               {presets.length > 0 ? (
                 <div className="space-y-1 mb-3">
                   {presets.map((p, i) => (
                     <div key={i} className="flex items-center gap-1">
-                      <button onClick={() => applyPreset(p)} className="flex-1 text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition border border-transparent hover:border-indigo-200 truncate">{p.name}</button>
-                      <button onClick={() => deletePreset(i)} className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition" title={isRtl ? "حذف" : "Delete"}>
+                      <button onClick={() => applyPreset(p)} className="flex-1 text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400 transition border border-transparent hover:border-indigo-200 dark:hover:border-indigo-700 truncate">{p.name}</button>
+                      <button onClick={() => deletePreset(i)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition" title={isRtl ? "حذف" : "Delete"}>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                       </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-[11px] text-gray-400 mb-3">{isRtl ? "لا توجد إعدادات محفوظة" : "No saved presets"}</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-3">{isRtl ? "لا توجد إعدادات محفوظة" : "No saved presets"}</p>
               )}
               <div className="flex items-center gap-1">
                 <input
@@ -850,7 +850,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
                   onChange={(e) => setPresetNameInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") savePreset(); }}
                   placeholder={isRtl ? "اسم الإعداد" : "Preset name"}
-                  className="flex-1 min-w-0 text-xs px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  className="flex-1 min-w-0 text-xs px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
                 <button onClick={savePreset} disabled={!presetNameInput.trim()} className="px-2.5 py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 transition disabled:opacity-40 shrink-0">{isRtl ? "حفظ" : "Save"}</button>
               </div>
@@ -861,7 +861,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
                 {isProcessing && (<svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>)}
                 {isRtl ? "حفظ التغييرات" : "Save Changes"}
               </button>
-              <button onClick={onCancel} className="w-full py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-xl transition text-sm">{t("cancel")}</button>
+              <button onClick={onCancel} className="w-full py-2 text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition text-sm">{t("cancel")}</button>
             </div>
           </div>
         </div>

@@ -424,9 +424,9 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
           .fade-slide-up { animation: fadeSlideUp 0.4s ease forwards; }
         `}</style>
         <div className="max-w-md mx-auto mt-12">
-          <div className="bg-white p-10 rounded-3xl shadow-2xl shadow-indigo-100/60 text-center border border-gray-100">
+          <div className="bg-white dark:bg-gray-800 p-10 rounded-3xl shadow-2xl shadow-indigo-100/60 dark:shadow-indigo-900/30 text-center border border-gray-100 dark:border-gray-800">
             <div className="success-pop w-20 h-20 mx-auto mb-5">
-              <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-200">
+              <div className="w-20 h-20 bg-green-500 dark:bg-green-600 rounded-full flex items-center justify-center shadow-lg shadow-green-200 dark:shadow-green-900/30">
                 <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
                 </svg>
@@ -434,10 +434,10 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
             </div>
 
             <div className="fade-slide-up" style={{ animationDelay: "0.15s", opacity: 0 }}>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                 {isRtl ? "تم الإرسال!" : "Files Sent!"}
               </h2>
-              <p className="text-gray-500 mb-6 text-sm">
+              <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
                 {isRtl ? "وصلت ملفاتك إلى الطابعة بنجاح" : "Your files are on their way to the printer"}
               </p>
               <Button
@@ -462,10 +462,10 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
   return (
     <div className={`w-full max-w-3xl mx-auto px-3 sm:px-4 ${isRtl ? "rtl" : ""}`}>
       <div className="text-center mb-5">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
           {t("uploadTitle")}
         </h1>
-        <p className="text-sm sm:text-base text-gray-600">{t("uploadSub")}</p>
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">{t("uploadSub")}</p>
         <div className="mt-4 flex justify-center gap-3">
           <Button
             variant="link"
@@ -492,13 +492,13 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
 
       <form
         onSubmit={handleSubmit}
-        className="bg-white p-4 sm:p-6 lg:p-7 rounded-2xl shadow-xl shadow-indigo-100/40 border border-white space-y-4 sm:space-y-5 mb-8"
+        className="bg-white dark:bg-gray-800 p-4 sm:p-6 lg:p-7 rounded-2xl shadow-xl shadow-indigo-100/40 dark:shadow-indigo-900/20 border border-white dark:border-gray-700 space-y-4 sm:space-y-5 mb-8"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">
               {t("customerName")}{" "}
-              <span className="text-gray-400 font-normal">
+              <span className="text-gray-400 dark:text-gray-500 font-normal">
                 ({isRtl ? "اختياري" : "Optional"})
               </span>
             </label>
@@ -513,9 +513,9 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">
               {t("phoneNumber")}{" "}
-              <span className="text-gray-400 font-normal">
+              <span className="text-gray-400 dark:text-gray-500 font-normal">
                 ({isRtl ? "اختياري" : "Optional"})
               </span>
             </label>
@@ -532,7 +532,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
+          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">
             {t("notes")}
           </label>
           <Textarea
@@ -550,8 +550,8 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
         </div>
 
         {/* Print Preferences Section */}
-        <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
-          <label className="block text-sm font-semibold text-gray-800 mb-4">
+        <div className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
+          <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4">
             {isRtl ? "تفضيلات الطباعة" : "Print Preferences"}
           </label>
 
@@ -559,7 +559,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Color Mode */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">
                 {isRtl ? "وضع الألوان" : "Color Mode"}
               </label>
               <div className="flex gap-2">
@@ -596,7 +596,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
 
             {/* Number of Copies */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">
                 {isRtl ? "عدد النسخ" : "Number of Copies"}
               </label>
               <div className="flex items-center gap-2">
@@ -673,7 +673,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
 
             {/* Paper Type */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">
                 {isRtl ? "نوع الورق" : "Paper Type"}
               </label>
               <div className="flex flex-wrap gap-2">
@@ -702,7 +702,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
         </div>
 
         <div className="relative">
-          <label className="block text-sm font-semibold text-gray-800 mb-2">
+          <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
             {t("selectFile")}
           </label>
           <div
@@ -746,8 +746,8 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
             }}
             className={`border-2 border-dashed rounded-xl p-5 sm:p-8 text-center cursor-pointer transition-all active:scale-[0.99] touch-manipulation ${
               isDragging
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+                ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20"
+                : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
             }`}
           >
             <input
@@ -760,7 +760,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
             />
             <div className="flex flex-col items-center gap-1 sm:gap-2">
               <svg
-                className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400"
+                className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 dark:text-gray-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -772,29 +772,29 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                 ></path>
               </svg>
-              <p className="text-sm sm:text-base text-gray-600 font-medium">
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 font-medium">
                 {t("dragDrop")}
               </p>
-              <p className="text-xs text-gray-500">{t("fileLimit")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("fileLimit")}</p>
             </div>
           </div>
         </div>
 
         {selectedFiles.length > 0 && (
           <div className="space-y-3 mt-4">
-            <h3 className="text-sm font-bold text-gray-900">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
               {isRtl ? "الملفات المختارة" : "Selected Files"} (
               {selectedFiles.length})
             </h3>
             {selectedFiles.map((fileStatus) => (
               <div
                 key={fileStatus.id}
-                className="bg-gray-50 border border-gray-200 rounded-lg p-3"
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
                     <svg
-                      className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 mt-0.5 flex-shrink-0"
+                      className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -807,25 +807,25 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                       ></path>
                     </svg>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs sm:text-sm font-medium text-gray-900 break-words leading-snug">
+                      <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 break-words leading-snug">
                         {fileStatus.file.name}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex flex-wrap gap-x-2">
                         <span>{formatSize(fileStatus.file.size)}</span>
                         {(() => {
                           const priceInfo = getFilePriceWithDiscount(fileStatus.file);
                           if (priceInfo === null && isOfficeFile(fileStatus.file)) {
-                            return <span className="text-red-500 text-[10px]">{isRtl ? "لا يمكن حساب الصفحات" : "Can't count pages"}</span>;
+                            return <span className="text-red-500 dark:text-red-400 text-[10px]">{isRtl ? "لا يمكن حساب الصفحات" : "Can't count pages"}</span>;
                           }
                           if (!priceInfo) return null;
                           return priceInfo.hasDiscount ? (
-                            <span className="text-green-600 font-medium text-[11px]">
-                              <span className="line-through text-gray-400 mr-1">{priceInfo.original.toFixed(0)} DZD</span>
+                            <span className="text-green-600 dark:text-green-400 font-medium text-[11px]">
+                              <span className="line-through text-gray-400 dark:text-gray-500 mr-1">{priceInfo.original.toFixed(0)} DZD</span>
                               {priceInfo.final.toFixed(0)} DZD
                               <span className="text-[10px] ml-0.5">(-{priceInfo.discount.toFixed(0)})</span>
                             </span>
                           ) : (
-                            <span className="text-gray-600">{priceInfo.original.toFixed(0)} DZD</span>
+                            <span className="text-gray-600 dark:text-gray-300">{priceInfo.original.toFixed(0)} DZD</span>
                           );
                         })()}
                       </p>
@@ -835,7 +835,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                     <button
                       type="button"
                       onClick={() => removeFile(fileStatus.id)}
-                      className="text-gray-400 hover:text-red-500 p-1 -m-1 flex-shrink-0"
+                      className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 p-1 -m-1 flex-shrink-0"
                       aria-label="Remove file"
                     >
                       <svg
@@ -855,7 +855,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                   )}
                   {fileStatus.status === "success" && (
                     <svg
-                      className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0 mt-0.5"
+                      className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 dark:text-green-400 flex-shrink-0 mt-0.5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -870,7 +870,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                   )}
                   {fileStatus.status === "error" && (
                     <svg
-                      className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 flex-shrink-0 mt-0.5"
+                      className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -885,7 +885,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                   )}
                 </div>
                 {fileStatus.status === "uploading" && (
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2 overflow-hidden">
                     <div
                       className="bg-indigo-600 h-1.5 transition-all duration-300"
                       style={{ width: `${fileStatus.progress}%` }}
@@ -897,7 +897,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
 
             {/* Total Price Summary with Discounts */}
             {selectedFiles.length > 0 && shopSettings?.pricing && (
-              <div className="mt-4 p-3 sm:p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+              <div className="mt-4 p-3 sm:p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl">
                 {(() => {
                   let totalOriginal = 0;
                   let totalDiscount = 0;
@@ -917,15 +917,15 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                   return (
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-gray-600 dark:text-gray-300">
                           {isRtl ? "المجموع الفرعي" : "Subtotal"}
                         </span>
-                        <span className="font-semibold text-gray-900">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">
                           {totalOriginal.toFixed(0)} DZD
                         </span>
                       </div>
                       {hasDiscount && (
-                        <div className="flex justify-between items-center text-green-600">
+                        <div className="flex justify-between items-center text-green-600 dark:text-green-400">
                           <span className="text-sm">
                             {isRtl ? "الخصم" : "Discount"}
                           </span>
@@ -935,15 +935,15 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                         </div>
                       )}
                       <div className="border-t border-indigo-200 pt-2 flex justify-between items-center">
-                        <span className="text-base font-bold text-gray-900">
+                        <span className="text-base font-bold text-gray-900 dark:text-gray-100">
                           {isRtl ? "الإجمالي" : "Total"}
                         </span>
-                        <span className="text-lg font-bold text-indigo-600">
+                        <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
                           {totalFinal.toFixed(0)} DZD
                         </span>
                       </div>
                       {hasDiscount && (
-                        <p className="text-xs text-green-600 text-center mt-2">
+                        <p className="text-xs text-green-600 dark:text-green-400 text-center mt-2">
                           {isRtl
                             ? `وفرت ${totalDiscount.toFixed(0)} DZD!`
                             : `You saved ${totalDiscount.toFixed(0)} DZD!`}
@@ -958,7 +958,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
         )}
 
         {error && (
-          <div className="p-3 bg-red-50 text-red-600 rounded-lg text-xs sm:text-sm border border-red-100 leading-relaxed">
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-xs sm:text-sm border border-red-100 dark:border-red-800/30 leading-relaxed">
             {error}
           </div>
         )}
@@ -967,7 +967,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
           type="submit"
           size="lg"
           disabled={isUploading || selectedFiles.length === 0}
-          className="w-full gap-2 text-base sm:text-lg py-3 sm:py-4 shadow-xl shadow-indigo-600/20"
+          className="w-full gap-2 text-base sm:text-lg py-3 sm:py-4 shadow-xl shadow-indigo-600/20 dark:shadow-indigo-400/20"
         >
           {isUploading ? (
             <svg
@@ -1014,7 +1014,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
       {recentJobs.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
               {t("recentUploads")}
             </h2>
           </div>
@@ -1025,8 +1025,8 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <div
                     className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 ${job.status === PrintStatus.PRINTED
-                      ? "bg-green-100 text-green-600"
-                      : "bg-yellow-100 text-yellow-600"
+                      ? "bg-green-100 text-green-600 dark:text-green-400"
+                      : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
                       }`}
                   >
                     {job.status === PrintStatus.PRINTED ? (
@@ -1060,10 +1060,10 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 truncate max-w-[140px] sm:max-w-[240px] md:max-w-sm text-sm sm:text-base">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[140px] sm:max-w-[240px] md:max-w-sm text-sm sm:text-base">
                       {job.fileName}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5 flex-wrap">
+                    <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 mt-0.5 flex-wrap">
                       <p>
                         {new Date(job.uploadDate).toLocaleDateString(
                           isRtl ? "ar-EG" : "en-US",
@@ -1073,9 +1073,9 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                       {jobPageCounts[job.id] && !isOfficeType(job.fileType) ? (
                         <>
                           <span className="w-1 h-1 rounded-full bg-gray-300 hidden sm:inline-block"></span>
-                          <p className="flex items-center gap-1 font-medium bg-gray-100/80 text-gray-500 px-1.5 py-0.5 rounded text-[10px] sm:text-xs">
+                          <p className="flex items-center gap-1 font-medium bg-gray-100 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded text-[10px] sm:text-xs">
                             <svg
-                              className="w-3 h-3 text-gray-400"
+                              className="w-3 h-3 text-gray-400 dark:text-gray-500"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -1097,7 +1097,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <div className="flex items-center gap-2">
                     {(shopSettings?.pricing || (shopSettings?.paperTypes && shopSettings.paperTypes.length > 0)) && (
-                      <span className="text-xs sm:text-sm font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-md border border-green-100 whitespace-nowrap">
+                      <span className="text-sm font-black text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-2.5 py-1 rounded-md border border-green-200 dark:border-green-800/30 shadow-sm dark:shadow-gray-900/50 whitespace-nowrap tracking-tight">
                         {formatPrice(
                           calculatePrintPrice(
                             job,
@@ -1109,8 +1109,8 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                     )}
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${job.status === PrintStatus.PRINTED
-                        ? "bg-green-100 text-green-700"
-                        : "bg-yellow-100 text-yellow-700"
+                        ? "bg-green-100 text-green-700 dark:text-green-400"
+                        : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
                         }`}
                     >
                       {job.status === PrintStatus.PRINTED
@@ -1123,7 +1123,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                       type="button"
                       onClick={() => handlePreviewJob(job)}
                       title={isRtl ? "معاينة" : "Preview"}
-                      className="p-1.5 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 text-gray-400 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 dark:hover:text-indigo-400 text-gray-400 dark:text-gray-500 transition-colors"
                     >
                       <svg
                         className="w-4 h-4"
@@ -1150,7 +1150,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                         type="button"
                         onClick={() => handleCancelJob(job.id)}
                         title={isRtl ? "إلغاء طباعة" : "Cancel print"}
-                        className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-500 text-gray-400 transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400 text-gray-400 dark:text-gray-500 transition-colors"
                       >
                         <svg
                           className="w-4 h-4"
@@ -1174,9 +1174,9 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
             ))}
           </div>
           {shopSettings?.pricing && (
-            <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 flex items-start gap-3 mt-4">
+            <div className="p-3 bg-blue-50/50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/30 flex items-start gap-3 mt-4">
               <svg
-                className="w-5 h-5 text-blue-500 mt-0.5 shrink-0"
+                className="w-5 h-5 text-blue-500 dark:text-blue-400 mt-0.5 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1188,7 +1188,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                   d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <p className="text-xs text-blue-700 font-medium">
+              <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">
                 {isRtl
                   ? "ملاحظة: السعر المعروض تقريبي. قد يتغير السعر النهائي حسب إعدادات المتجر الفعلية وحجم وألوان المستند النهائية التي يتم طباعتها."
                   : "Note: The estimated price is approximate. The final price may change slightly depending on the exact dimensions, color ink coverage, and store verification."}
@@ -1220,7 +1220,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                 <img
                   src={qrCodeUrl}
                   alt="QR Code"
-                  className="border-2 border-gray-200 rounded-lg"
+                  className="border-2 border-gray-200 dark:border-gray-700 rounded-lg"
                 />
               </div>
             )}
@@ -1260,7 +1260,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
       {isUploading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-in fade-in duration-200"
           style={{ background: "rgba(10,10,25,0.6)", backdropFilter: "blur(8px)" }}>
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center animate-in zoom-in-95 duration-200">
             {/* Progress ring */}
             <div className="relative mx-auto mb-3 w-16 h-16">
               <svg className="w-16 h-16 -rotate-90" viewBox="0 0 80 80">
@@ -1277,16 +1277,16 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-indigo-700 transition-all duration-300">{overallProgress}%</span>
+                <span className="text-lg font-bold text-indigo-700 dark:text-indigo-400 transition-all duration-300">{overallProgress}%</span>
               </div>
             </div>
 
-            <p className="text-sm font-semibold text-gray-700 mb-4">
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">
               {isRtl ? "جاري الإرسال..." : "Uploading..."}
             </p>
 
             {/* Progress bar */}
-            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden mb-5 relative">
+            <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden mb-5 relative">
               <div
                 className="h-full rounded-full bg-indigo-600 transition-all duration-500 ease-out"
                 style={{ width: `${Math.max(overallProgress, 4)}%` }}
@@ -1298,7 +1298,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
               {selectedFiles.map(f => (
                 <div key={f.id} className="flex items-center gap-2">
                   {f.status === "success" ? (
-                    <div className="w-3.5 h-3.5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 animate-in fade-in duration-200">
+                    <div className="w-3.5 h-3.5 rounded-full bg-green-500 dark:bg-green-600 flex items-center justify-center flex-shrink-0 animate-in fade-in duration-200">
                       <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                       </svg>
@@ -1306,9 +1306,9 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                   ) : f.status === "uploading" ? (
                     <div className="w-3.5 h-3.5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin flex-shrink-0" />
                   ) : (
-                    <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-200 flex-shrink-0" />
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-200 dark:border-gray-700 flex-shrink-0" />
                   )}
-                  <span className={`text-xs truncate ${f.status === "success" ? "text-green-700 font-medium" : f.status === "error" ? "text-red-600" : "text-gray-600"}`}>
+                  <span className={`text-xs truncate ${f.status === "success" ? "text-green-700 dark:text-green-400 font-medium" : f.status === "error" ? "text-red-600 dark:text-red-400" : "text-gray-600 dark:text-gray-300"}`}>
                     {f.file.name}
                   </span>
                 </div>

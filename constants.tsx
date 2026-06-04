@@ -86,6 +86,10 @@ export const TRANSLATIONS: Translations = {
   studioCancel: { en: "Cancel", ar: "إلغاء" },
   addJob: { en: "Add Job", ar: "إضافة طلب" },
   uploading: { en: "Uploading...", ar: "جارٍ الرفع..." },
+  loading: { en: "Loading...", ar: "جارٍ التحميل..." },
+  noPrintJobsFound: { en: "No print jobs found", ar: "لا توجد طلبات طباعة" },
+  file: { en: "file", ar: "ملف" },
+  files: { en: "files", ar: "ملفات" },
   exporting: { en: "Exporting...", ar: "جارٍ التصدير..." },
   studioNotes: { en: "Notes", ar: "ملاحظات" },
   // PDF Job Manager

@@ -28,6 +28,10 @@ const App: React.FC = () => {
     logoUrl: null,
   });
 
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem("ps_dark_mode") === "true";
+  });
+
   const [currentHash, setCurrentHash] = useState(window.location.hash);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
@@ -56,6 +60,11 @@ const App: React.FC = () => {
     localStorage.setItem("ps_language", lang);
     window.dispatchEvent(new CustomEvent("ps:langchange", { detail: lang }));
   }, [lang]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("ps_dark_mode", String(darkMode));
+  }, [darkMode]);
 
   // Load settings from server
   useEffect(() => {
@@ -203,20 +212,20 @@ const App: React.FC = () => {
     if (showAdminLogin && !isAdmin) {
       return (
         <div className="max-w-md mx-auto">
-          <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-            <h2 className="text-2xl font-bold mb-6 text-center">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl dark:shadow-2xl dark:shadow-black/40 border border-gray-100 dark:border-gray-700">
+            <h2 className="text-2xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100">
               {TRANSLATIONS.adminLogin[lang]}
             </h2>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {TRANSLATIONS.password[lang]}
                 </label>
                 <div className="relative">
                   <input
                     type={showLoginPassword ? "text" : "password"}
                     autoFocus
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
@@ -224,7 +233,7 @@ const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowLoginPassword(!showLoginPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition"
                     tabIndex={-1}
                   >
                     {showLoginPassword ? (
@@ -272,7 +281,7 @@ const App: React.FC = () => {
               )}
               <button
                 type="submit"
-                className="w-full bg-gray-900 text-white font-bold py-2 rounded-lg hover:bg-black transition"
+                className="w-full bg-gray-900 dark:bg-indigo-600 text-white font-bold py-2 rounded-lg hover:bg-black dark:hover:bg-indigo-700 transition"
               >
                 {TRANSLATIONS.loginBtn[lang]}
               </button>
@@ -293,6 +302,7 @@ const App: React.FC = () => {
           onLogout={handleLogout}
           currentSettings={settings}
           onSettingsUpdate={setSettings}
+          darkMode={darkMode}
         />
       );
     }
@@ -301,11 +311,11 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col antialiased font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-gray-950 flex flex-col antialiased font-sans selection:bg-indigo-100 dark:selection:bg-indigo-900/40 selection:text-indigo-900 dark:selection:text-indigo-200">
       <nav
         dir="ltr"
         style={{ direction: "ltr", flexDirection: "row" }}
-        className="bg-white/80 backdrop-blur-xl border-b border-gray-100/50 px-6 py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm"
+        className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100/50 dark:border-gray-800/50 px-6 py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm dark:shadow-gray-900/30"
       >
         <div className="flex items-center gap-3 cursor-pointer" style={{ direction: "ltr" }} onClick={() => (window.location.hash = "")}>
           <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white overflow-hidden shadow-sm">
@@ -328,7 +338,7 @@ const App: React.FC = () => {
           <div className="flex flex-col justify-center">
 <span
   dir="auto"
-  className="text-xl font-bold tracking-tight text-gray-900 truncate max-w-[150px] sm:max-w-[300px]"
+  className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 truncate max-w-[150px] sm:max-w-[300px]"
 >
   {settings.shopName || TRANSLATIONS.appTitle[lang]}
 </span>
@@ -336,11 +346,26 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="p-2 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 transition-all active:scale-95"
+            aria-label={lang === "ar" ? "الوضع الليلي" : "Dark mode"}
+          >
+            {darkMode ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
           <LanguageToggle currentLang={lang} onToggle={setLang} />
           {isAdmin && (
             <button
               onClick={handleToggleMode}
-              className="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-all flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-indigo-50 hover:shadow-sm border border-transparent hover:border-indigo-100 active:scale-95"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:shadow-sm dark:hover:shadow-indigo-900/20 border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800/50 active:scale-95"
             >
               {currentHash === "#studio" ? (
                 <>
@@ -392,7 +417,7 @@ const App: React.FC = () => {
 
       <footer
         dir="ltr"
-        className="py-4 text-center text-gray-400 text-sm border-t border-gray-100 bg-white"
+        className="py-4 text-center text-gray-400 dark:text-gray-500 text-sm border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
       >
         <p>
           &copy; {new Date().getFullYear()} {settings.shopName}.{" "}
