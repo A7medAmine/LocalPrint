@@ -36,9 +36,12 @@ export function isFileTypeSupported(fileName: string, mimeType?: string): boolea
 export function sanitizeHtml(html: string): string {
   return html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/on\w+="[^"]*"/gi, "")
-    .replace(/on\w+='[^']*'/gi, "")
-    .replace(/javascript:/gi, "");
+    .replace(/<[^>]*\bon\w+\s*=[^>]*>/gi, "")
+    .replace(/<[^>]*\bjavascript\s*:[^>]*>/gi, "")
+    .replace(/<[^>]*\bdata\s*:\s*text\/html[^>]*>/gi, "")
+    .replace(/on\w+\s*=\s*[^'"\s][^\s>]*/gi, "")
+    .replace(/javascript\s*:/gi, "")
+    .replace(/<\/?\s*(script|iframe|embed|object|applet|base|meta|link|style|form|input|button|textarea|select|option)\b[^>]*>/gi, "");
 }
 
 export function formatFileSize(bytes: number): string {

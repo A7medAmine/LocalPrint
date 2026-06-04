@@ -47,7 +47,7 @@ const LoadJobModal: React.FC<LoadJobModalProps> = ({ isOpen, onClose, onSelect, 
     setDownloading(job.id);
     setError("");
     try {
-      const res = await fetch(`/api/files/${job.serverFileName}`);
+      const res = await fetch(`/api/files/public/${job.id}`);
       if (!res.ok) throw new Error("File not found");
       const blob = await res.blob();
       const file = new File([blob], job.fileName, { type: job.fileType });

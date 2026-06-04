@@ -56,8 +56,6 @@ function generateToken() {
 function isValidAdminToken(req) {
   const auth = req.headers.authorization;
   if (auth && auth.startsWith("Bearer ") && adminTokens.has(auth.slice(7))) return true;
-  const queryToken = req.query?.token;
-  if (queryToken && adminTokens.has(queryToken)) return true;
   return false;
 }
 
@@ -147,7 +145,9 @@ if (isDev) {
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Content-Security-Policy", "script-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; frame-src 'self';");
   next();
 });
 
@@ -286,8 +286,8 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Get all jobs
-app.get("/api/jobs", (req, res) => {
+// Get all jobs (admin only)
+app.get("/api/jobs", requireAdmin, (req, res) => {
   const jobs = db.prepare('SELECT * FROM jobs ORDER BY uploadDate DESC').all();
   const formattedJobs = jobs.map(job => ({
     ...job,
@@ -300,6 +300,32 @@ app.get("/api/jobs", (req, res) => {
     }
   }));
   res.status(200).json(formattedJobs);
+});
+
+// Public query — get jobs by ID array (for "my recent uploads")
+app.post("/api/jobs/query", (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(200).json([]);
+  }
+  const placeholders = ids.map(() => '?').join(',');
+  const jobs = db.prepare(`SELECT * FROM jobs WHERE id IN (${placeholders}) ORDER BY uploadDate DESC`).all(...ids);
+  const sanitized = jobs.map(job => ({
+    id: job.id,
+    fileName: job.fileName,
+    fileType: job.fileType,
+    fileSize: job.fileSize,
+    uploadDate: job.uploadDate,
+    status: job.status,
+    pageCount: job.pageCount,
+    paperType: job.paperType || 'normal',
+    colorMode: job.colorMode,
+    copies: job.copies,
+    source: job.source,
+    paymentStatus: job.paymentStatus || 'UNPAID',
+    paymentAmount: job.paymentAmount || 0,
+  }));
+  res.status(200).json(sanitized);
 });
 
 // Upload new job
@@ -601,8 +627,31 @@ app.post("/api/backup/restore", requireAdmin, uploadMemory.single("file"), (req,
   }
 });
 
-// Download/view file — serve from uploads/ directory only (path traversal protected)
-app.get(/^\/api\/files\/(.+)/, (req, res) => {
+// Public file access by job ID — anyone with the job ID can download (must be before the admin catch-all)
+app.get("/api/files/public/:id", (req, res) => {
+  try {
+    const job = db.prepare('SELECT serverFileName, fileName FROM jobs WHERE id = ?').get(req.params.id);
+    if (!job || !job.serverFileName) {
+      return res.status(404).json({ error: "File not found" });
+    }
+    const filePath = path.resolve(path.join(UPLOADS_DIR, job.serverFileName));
+    if (!filePath.startsWith(path.resolve(UPLOADS_DIR))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    if (fs.existsSync(filePath)) {
+      const safeName = job.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      res.set("Content-Disposition", `inline; filename="${safeName}"`);
+      res.sendFile(filePath);
+    } else {
+      res.status(404).json({ error: "File not found" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Download/view file by server file name (admin only — path traversal protected)
+app.get(/^\/api\/files\/(.+)/, requireAdmin, (req, res) => {
   const requested = path.normalize(req.params[0]).replace(/^(\.\.(\/|\\|$))+/, "");
   const filePath = path.resolve(path.join(UPLOADS_DIR, requested));
 
@@ -615,6 +664,18 @@ app.get(/^\/api\/files\/(.+)/, (req, res) => {
   } else {
     res.status(404).json({ error: "File not found" });
   }
+});
+
+// Public logo access (no auth — shown on public upload page)
+app.get("/api/logo", (req, res) => {
+  const settings = getSettings();
+  const filename = settings._logo_filename;
+  if (!filename) return res.status(404).json({ error: "No logo" });
+  const filePath = path.resolve(path.join(UPLOADS_DIR, filename));
+  if (!filePath.startsWith(path.resolve(UPLOADS_DIR)) || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Logo not found" });
+  }
+  res.sendFile(filePath);
 });
 
 // Get settings
@@ -680,20 +741,17 @@ app.post("/api/settings/logo", requireAdmin, upload.single("logo"), (req, res) =
     }
 
     const settings = getSettings();
-    // Delete old logo
-    if (settings.logoUrl) {
-      const oldFilename = settings.logoUrl.split("/").pop();
+    // Delete old logo file
+    const oldFilename = settings._logo_filename;
+    if (oldFilename) {
       const oldPath = path.join(UPLOADS_DIR, oldFilename);
       if (fs.existsSync(oldPath)) {
-        try {
-          fs.unlinkSync(oldPath);
-        } catch (e) {
-          console.warn("⚠️  Could not delete old logo");
-        }
+        try { fs.unlinkSync(oldPath); } catch (e) { console.warn("⚠️  Could not delete old logo"); }
       }
     }
 
-    const logoUrl = `/api/files/${req.file.filename}`;
+    updateSetting('_logo_filename', req.file.filename);
+    const logoUrl = `/api/logo`;
     updateSetting('logoUrl', logoUrl);
     res.status(200).json({ success: true, logoUrl });
   } catch (err) {
@@ -1277,7 +1335,7 @@ app.get('/api/gmail/attachment/:pendingId/:attachmentIndex', async (req, res) =>
     if (fs.existsSync(cachePath)) {
       const cached = fs.readFileSync(cachePath);
       res.set('Content-Type', att.mimeType);
-      res.set('Content-Disposition', `inline; filename="${att.filename}"`);
+      res.set('Content-Disposition', `inline; filename="${att.filename.replace(/[^a-zA-Z0-9._-]/g, '_')}"`);
       return res.send(cached);
     }
 
@@ -1295,7 +1353,7 @@ app.get('/api/gmail/attachment/:pendingId/:attachmentIndex', async (req, res) =>
     fs.writeFileSync(cachePath, buffer);
 
     res.set('Content-Type', att.mimeType);
-    res.set('Content-Disposition', `inline; filename="${att.filename}"`);
+    res.set('Content-Disposition', `inline; filename="${att.filename.replace(/[^a-zA-Z0-9._-]/g, '_')}"`);
     res.send(buffer);
   } catch (err) {
     console.error("❌ Error fetching attachment:", err);

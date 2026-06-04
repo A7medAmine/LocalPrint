@@ -63,6 +63,7 @@ const App: React.FC = () => {
       try {
         const serverSettings = await storageService.getSettings();
         setSettings(serverSettings);
+        document.title = serverSettings.shopName;
       } catch (error) {
         console.error("Failed to load settings:", error);
       }

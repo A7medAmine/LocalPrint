@@ -223,28 +223,28 @@ const CardIDTool: React.FC = () => {
 
   // Auto-load front/back images from bulk "Print as Card" action
   useEffect(() => {
-    const frontKey = sessionStorage.getItem("ps_card_front");
-    const backKey = sessionStorage.getItem("ps_card_back");
-    if (!frontKey && !backKey) return;
+    const frontId = sessionStorage.getItem("ps_card_front");
+    const backId = sessionStorage.getItem("ps_card_back");
+    if (!frontId && !backId) return;
     sessionStorage.removeItem("ps_card_front");
     sessionStorage.removeItem("ps_card_back");
     (async () => {
-      if (frontKey) {
+      if (frontId) {
         try {
-          const res = await fetch(`/api/files/${frontKey}`);
+          const res = await fetch(`/api/files/public/${frontId}`);
           if (res.ok) {
             const blob = await res.blob();
-            const file = new File([blob], frontKey, { type: blob.type || "image/png" });
+            const file = new File([blob], frontId, { type: blob.type || "image/png" });
             await handleFrontFile(file);
           }
         } catch {}
       }
-      if (backKey) {
+      if (backId) {
         try {
-          const res = await fetch(`/api/files/${backKey}`);
+          const res = await fetch(`/api/files/public/${backId}`);
           if (res.ok) {
             const blob = await res.blob();
-            const file = new File([blob], backKey, { type: blob.type || "image/png" });
+            const file = new File([blob], backId, { type: blob.type || "image/png" });
             await handleBackFile(file);
           }
         } catch {}

@@ -131,30 +131,23 @@ class StorageService {
     }
   }
 
-  async getMyRecentJobs(): Promise<PrintJob[]> {
+  async getMyRecentJobs(): Promise<Partial<PrintJob>[]> {
     try {
-      const all = await this.getMetadata();
       const myIds = this.getMyJobIds();
-      return all
-        .filter((j) => myIds.includes(j.id))
-        .sort(
-          (a, b) =>
-            new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-        );
+      if (myIds.length === 0) return [];
+      const data = await this.safeFetch("/api/jobs/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: myIds }),
+      });
+      return Array.isArray(data) ? data : [];
     } catch (e) {
       return [];
     }
   }
 
   async getFileUrl(id: string): Promise<string | null> {
-    try {
-      const jobs = await this.getMetadata();
-      const job = jobs.find((j) => j.id === id);
-      if (!job || !(job as any).serverFileName) return null;
-      return `/api/files/${(job as any).serverFileName}`;
-    } catch (e) {
-      return null;
-    }
+    return `/api/files/public/${id}`;
   }
 
   async updateStatus(id: string, status: PrintStatus): Promise<void> {

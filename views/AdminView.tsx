@@ -707,6 +707,8 @@ const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
+  const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+
   const handlePrint = async (job: PrintJob) => {
     const url = await storageService.getFileUrl(job.id);
     if (!url) return;
@@ -718,9 +720,10 @@ const AdminView: React.FC<AdminViewProps> = ({
 
     const printWindow = window.open("", "_blank");
     if (printWindow) {
+      const title = escapeHtml(job.fileName);
       printWindow.document.write(`
         <html>
-          <head><title>Print - ${job.fileName}</title></head>
+          <head><title>Print - ${title}</title></head>
           <body style="margin:0; display:flex; justify-content:center;">
             <img src="${url}" style="max-width:100%; max-height:100vh;" onload="window.print(); window.close();" />
           </body>
@@ -742,21 +745,22 @@ const AdminView: React.FC<AdminViewProps> = ({
     if (images.length > 0) {
       const printWindow = window.open("", "_blank");
       if (printWindow) {
-        let imagesHtml = "";
+        const doc = printWindow.document;
+        doc.write("<!DOCTYPE html><html><head><title>Bulk Print Images</title></head><body style='margin:0'>");
         for (const img of images) {
           const url = await storageService.getFileUrl(img.id);
-          imagesHtml += `<div style="page-break-after: always; display: flex; justify-content: center; align-items: center; height: 100vh;"><img src="${url}" style="max-width: 100%; max-height: 100%;" /></div>`;
+          const div = doc.createElement("div");
+          div.style.cssText = "page-break-after:always;display:flex;justify-content:center;align-items:center;height:100vh";
+          const imgEl = doc.createElement("img");
+          imgEl.src = url;
+          imgEl.style.cssText = "max-width:100%;max-height:100%";
+          div.appendChild(imgEl);
+          doc.body.appendChild(div);
         }
-        printWindow.document.write(`
-          <html>
-            <head><title>Bulk Print Images</title></head>
-            <body style="margin:0;">
-              ${imagesHtml}
-              <script>window.onload = () => { window.print(); window.close(); }</script>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
+        const script = doc.createElement("script");
+        script.textContent = "window.onload=function(){window.print();window.close()}";
+        doc.body.appendChild(script);
+        doc.close();
       }
     }
 
@@ -1161,8 +1165,8 @@ const AdminView: React.FC<AdminViewProps> = ({
               return showCardBtn ? (
                 <Button variant="ghost" size="sm" onClick={() => {
                   const [front, back] = selectedImages;
-                  sessionStorage.setItem("ps_card_front", front.serverFileName || "");
-                  sessionStorage.setItem("ps_card_back", back.serverFileName || "");
+                  sessionStorage.setItem("ps_card_front", front.id);
+                  sessionStorage.setItem("ps_card_back", back.id);
                   window.location.hash = "studio";
                 }} title="Print as Card" className="flex-col gap-1 h-auto text-inherit hover:text-pink-400">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>

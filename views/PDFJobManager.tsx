@@ -143,8 +143,8 @@ const PDFJobManager: React.FC = () => {
         const res = await fetch("/api/jobs", { headers });
         const jobs = await res.json();
         const job = Array.isArray(jobs) ? jobs.find((j: any) => j.id === editJobId) : null;
-        if (!job?.serverFileName) return;
-        const fileRes = await fetch(`/api/files/${job.serverFileName}`);
+        if (!job?.id) return;
+        const fileRes = await fetch(`/api/files/public/${job.id}`);
         if (!fileRes.ok) return;
         const blob = await fileRes.blob();
         const f = new File([blob], job.fileName, { type: job.fileType });
