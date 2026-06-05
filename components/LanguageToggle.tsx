@@ -19,7 +19,7 @@ const LanguageToggle: React.FC<LanguageToggleProps> = ({
     >
       {/* Sliding pill */}
       <div
-        className="absolute top-[3px] bottom-[3px] rounded-full bg-indigo-600 transition-transform duration-[280ms] ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform"
+        className="absolute top-[3px] bottom-[3px] rounded-full bg-indigo-600 transition-transform duration-300 ease-out will-change-transform"
         style={{
           width: "calc(50% - 3px)",
           transform:

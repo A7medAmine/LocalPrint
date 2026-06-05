@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Language, PrintJob, PrintStatus, PaymentStatus, ShopSettings, DiscountRule, DiscountType, ConditionType, PaperType } from "../types";
 import { TRANSLATIONS } from "../constants";
 import { storageService } from "../services/storageService";
@@ -78,7 +79,8 @@ const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const isRtl = lang === "ar";
-  // toast() imported from use-toast, called directly
+  const navigate = useNavigate();
+
 
   // Confirm dialog states
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -111,6 +113,11 @@ const AdminView: React.FC<AdminViewProps> = ({
   );
   const [editingPaperTypeId, setEditingPaperTypeId] = useState<string | null>(null);
   const [editingPaperTypeForm, setEditingPaperTypeForm] = useState<{ name: string; nameAr: string; colorPerPage: number; blackWhitePerPage: number } | null>(null);
+  const [phoneNumbers, setPhoneNumbers] = useState<string[]>(currentSettings.phoneNumbers || []);
+  const [email, setEmail] = useState(currentSettings.email || "");
+  const [address, setAddress] = useState(currentSettings.address || "");
+  const [workingHours, setWorkingHours] = useState(currentSettings.workingHours || "");
+  const [returnPolicy, setReturnPolicy] = useState(currentSettings.returnPolicy || "");
   const [showAddPaperTypeForm, setShowAddPaperTypeForm] = useState(false);
   const [newPaperTypeForm, setNewPaperTypeForm] = useState({ name: "", nameAr: "", colorPerPage: 30, blackWhitePerPage: 15 });
   const [showPasswords, setShowPasswords] = useState({ current: false, newPass: false, confirm: false });
@@ -462,6 +469,7 @@ const AdminView: React.FC<AdminViewProps> = ({
     const es = new EventSource('/api/events');
     es.addEventListener("gmail-new", () => { loadGmailPending(); });
     es.addEventListener("new-job", () => { loadJobs(); });
+    es.addEventListener("job-deleted", () => { loadJobs(); });
     es.onerror = () => {};
     return () => { es.close(); };
   }, []);
@@ -473,6 +481,11 @@ const AdminView: React.FC<AdminViewProps> = ({
     if (currentSettings.paperTypes && currentSettings.paperTypes.length > 0) {
       setPaperTypes(currentSettings.paperTypes);
     }
+    if (currentSettings.phoneNumbers) setPhoneNumbers(currentSettings.phoneNumbers);
+    if (currentSettings.email) setEmail(currentSettings.email);
+    if (currentSettings.address) setAddress(currentSettings.address);
+    if (currentSettings.workingHours) setWorkingHours(currentSettings.workingHours);
+    if (currentSettings.returnPolicy) setReturnPolicy(currentSettings.returnPolicy);
   }, [currentSettings]);
 
   const loadJobs = async () => {
@@ -818,7 +831,7 @@ const AdminView: React.FC<AdminViewProps> = ({
   const handleEdit = async (job: PrintJob) => {
     if (job.fileType.includes("pdf")) {
       sessionStorage.setItem("ps_edit_job", job.id);
-      window.location.hash = "studio";
+      navigate("/admin/studio");
     } else {
       const url = await storageService.getFileUrl(job.id);
       if (url && job.fileType.includes("image")) {
@@ -1060,8 +1073,8 @@ const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const saveSettings = async () => {
-    await storageService.saveSettings({ shopName, paperTypes });
-    onSettingsUpdate({ ...currentSettings, shopName, paperTypes });
+    await storageService.saveSettings({ shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy });
+    onSettingsUpdate({ ...currentSettings, shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy });
     toast({ title: isRtl ? "تم الحفظ بنجاح" : "Settings saved successfully", variant: "success" });
   };
 
@@ -1169,7 +1182,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                   const [front, back] = selectedImages;
                   sessionStorage.setItem("ps_card_front", front.id);
                   sessionStorage.setItem("ps_card_back", back.id);
-                  window.location.hash = "studio";
+      navigate("/admin/studio");
                 }} title="Print as Card" className="flex-col gap-1 h-auto text-inherit hover:text-pink-400 dark:hover:text-pink-300">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                   <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{isRtl ? "بطاقة" : "Card"}</span>
@@ -1198,7 +1211,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => (window.location.hash = "studio")}>
+          <Button variant="outline" size="sm" onClick={() => (navigate("/admin/studio"))}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
             {isRtl ? "استوديو الطباعة" : "Print Studio"}
           </Button>
@@ -2175,6 +2188,49 @@ const AdminView: React.FC<AdminViewProps> = ({
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">{isRtl ? "PNG, JPG أو GIF (الحد الأقصى 2MB)" : "PNG, JPG or GIF (max 2MB)"}</p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Phone Numbers */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{t("shopPhone")}</label>
+                    <div className="space-y-2">
+                      {phoneNumbers.map((num, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Input value={num} onChange={(e) => { const next = [...phoneNumbers]; next[idx] = e.target.value; setPhoneNumbers(next); }} placeholder={isRtl ? "رقم الهاتف" : "Phone number"} />
+                          <button type="button" onClick={() => setPhoneNumbers(phoneNumbers.filter((_, i) => i !== idx))} className="p-2 text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      ))}
+                      <Button variant="outline" size="sm" onClick={() => setPhoneNumbers([...phoneNumbers, ""])}>
+                        <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                        {t("addPhone")}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{t("shopEmail")}</label>
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={isRtl ? "البريد الإلكتروني" : "shop@example.com"} />
+                  </div>
+
+                  {/* Address */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{t("shopAddress")}</label>
+                    <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={isRtl ? "عنوان المحل" : "123 Main St, City"} />
+                  </div>
+
+                  {/* Working Hours */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{t("shopWorkingHours")}</label>
+                    <Input value={workingHours} onChange={(e) => setWorkingHours(e.target.value)} placeholder={isRtl ? "ساعات العمل" : "Sat-Thu 9:00-18:00"} />
+                  </div>
+
+                  {/* Return Policy */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{t("shopReturnPolicy")}</label>
+                    <textarea value={returnPolicy} onChange={(e) => setReturnPolicy(e.target.value)} rows={3} className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 resize-y" placeholder={isRtl ? "سياسة الإرجاع" : "Return policy details..."} />
                   </div>
                 </CardContent>
               </Card>

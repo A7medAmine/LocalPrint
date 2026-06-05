@@ -324,6 +324,11 @@ app.post("/api/jobs/query", (req, res) => {
     source: job.source,
     paymentStatus: job.paymentStatus || 'UNPAID',
     paymentAmount: job.paymentAmount || 0,
+    printPreferences: {
+      colorMode: job.colorMode,
+      copies: job.copies,
+      paperType: job.paperType || 'normal'
+    },
   }));
   res.status(200).json(sanitized);
 });
@@ -509,9 +514,15 @@ app.put("/api/jobs/:id/preferences", requireAdmin, (req, res) => {
   });
 });
 
-// Delete job
-app.delete("/api/jobs/:id", requireAdmin, (req, res) => {
+// Delete job - accessible to customers (verifies ownership via myIds)
+app.delete("/api/jobs/:id", (req, res) => {
   const jobId = req.params.id;
+  const { myIds } = req.body || {};
+
+  if (!Array.isArray(myIds) || !myIds.includes(jobId)) {
+    return res.status(403).json({ success: false, error: "Not authorized to delete this job" });
+  }
+
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
 
   if (job) {
@@ -527,6 +538,7 @@ app.delete("/api/jobs/:id", requireAdmin, (req, res) => {
     }
 
     db.prepare('DELETE FROM jobs WHERE id = ?').run(jobId);
+    broadcastEvent("job-deleted", { id: jobId });
     res.status(200).json({ success: true });
   } else {
     res.status(404).json({ success: false, error: "Job not found" });
@@ -718,6 +730,21 @@ app.post("/api/settings", requireAdmin, (req, res) => {
     }
     if (req.body.discounts !== undefined) {
       updateSetting('discounts', req.body.discounts);
+    }
+    if (req.body.phoneNumbers !== undefined) {
+      updateSetting('phoneNumbers', req.body.phoneNumbers);
+    }
+    if (req.body.email !== undefined) {
+      updateSetting('email', req.body.email);
+    }
+    if (req.body.address !== undefined) {
+      updateSetting('address', req.body.address);
+    }
+    if (req.body.workingHours !== undefined) {
+      updateSetting('workingHours', req.body.workingHours);
+    }
+    if (req.body.returnPolicy !== undefined) {
+      updateSetting('returnPolicy', req.body.returnPolicy);
     }
 
     const settings = getSettings();
