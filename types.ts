@@ -52,6 +52,11 @@ export interface ShopSettings {
     cardboardPerPage?: number;
   };
   paperTypes?: PaperType[];
+  phoneNumbers?: string[];
+  email?: string;
+  address?: string;
+  workingHours?: string;
+  returnPolicy?: string;
 }
 
 export type Language = "en" | "ar";

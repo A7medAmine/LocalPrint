@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import CardIDTool from "./CardIDTool";
 import PDFJobManager from "./PDFJobManager";
 import { useLanguage } from "../lib/useLanguage";
@@ -9,6 +10,7 @@ type StudioTab = "cards" | "pdf";
 
 const PrintStudio: React.FC = () => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<StudioTab>("cards");
 
   useEffect(() => {
@@ -20,7 +22,7 @@ const PrintStudio: React.FC = () => {
   return (
     <div className="space-y-6 text-gray-900 dark:text-gray-100">
       <div className="flex items-center gap-1 -ml-2">
-        <Button variant="ghost" size="sm" onClick={() => window.location.hash = "admin"}>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/admin/dashboard")}>
           <svg className="w-4 h-4 rtl:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
           </svg>

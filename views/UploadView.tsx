@@ -62,6 +62,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
     isOpen: boolean;
     jobId: string | null;
   }>({ isOpen: false, jobId: null });
+  const [storeInfoOpen, setStoreInfoOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -95,6 +96,9 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
   const [jobPageCounts, setJobPageCounts] = useState<{
     [jobId: string]: number;
   }>({});
+  const [filePageCounts, setFilePageCounts] = useState<{
+    [fileId: string]: number;
+  }>({});
   const [discountRules, setDiscountRules] = useState<DiscountRule[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -105,44 +109,76 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
     }
   }, [propSettings]);
 
+  // Fetch recent jobs, settings, and discount rules on mount and after upload
   useEffect(() => {
-    const fetchData = async () => {
-      const [jobs, settings, rules] = await Promise.all([
-        storageService.getMyRecentJobs(),
-        propSettings ? Promise.resolve(propSettings) : storageService.getSettings(),
-        storageService.getActiveDiscountRules(),
-      ]);
-      setRecentJobs(jobs);
-      if (!propSettings) setShopSettings(settings);
-      setDiscountRules(rules);
-
-      // Async page counting for pricing display
-      if (settings?.pricing || (settings?.paperTypes && settings.paperTypes.length > 0)) {
-        const counts: { [jobId: string]: number } = {};
-        for (const job of jobs) {
-          if (job.pageCount && job.pageCount > 0) {
-            counts[job.id] = job.pageCount;
-            continue;
-          }
-          try {
-            const url = await storageService.getFileUrl(job.id);
-            if (url) {
-              const response = await fetch(url);
-              const blob = await response.blob();
-              const file = new File([blob], job.fileName, { type: job.fileType });
-              counts[job.id] = await getActualPageCount(file);
-            } else {
-              counts[job.id] = 1;
-            }
-          } catch (e) {
-            counts[job.id] = 1;
-          }
-        }
-        setJobPageCounts(counts);
+    (async () => {
+      try {
+        const [jobs, settings, rules] = await Promise.all([
+          storageService.getMyRecentJobs(),
+          propSettings ? Promise.resolve(propSettings) : storageService.getSettings(),
+          storageService.getActiveDiscountRules(),
+        ]);
+        setRecentJobs(jobs);
+        if (!propSettings) setShopSettings(settings);
+        setDiscountRules(rules);
+      } catch (err) {
+        console.error("Failed to load recent data", err);
       }
-    };
-    fetchData();
+    })();
   }, [overallSuccess]);
+
+  // Compute page counts whenever recentJobs changes
+  useEffect(() => {
+    if (recentJobs.length === 0) return;
+    const isImageType = (t: string) => t.includes("image");
+    const counts: { [jobId: string]: number } = {};
+
+    // Set known counts synchronously (PDFs with server pageCount, images = 1)
+    for (const job of recentJobs) {
+      if (job.pageCount && job.pageCount > 0) counts[job.id] = job.pageCount;
+      else if (isImageType(job.fileType)) counts[job.id] = 1;
+    }
+    setJobPageCounts(counts);
+
+    // Async refine for unknown types
+    (async () => {
+      for (const job of recentJobs) {
+        if (counts[job.id] !== undefined) continue;
+        if (isOfficeType(job.fileType)) continue;
+        try {
+          const url = await storageService.getFileUrl(job.id);
+          if (!url) { counts[job.id] = 1; continue; }
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 8000);
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timer);
+          const blob = await response.blob();
+          const file = new File([blob], job.fileName, { type: job.fileType });
+          counts[job.id] = await getActualPageCount(file);
+        } catch {
+          counts[job.id] = 1;
+        }
+      }
+      setJobPageCounts({ ...counts });
+    })();
+  }, [recentJobs]);
+
+  // Count actual pages for selected files before upload
+  useEffect(() => {
+    const countPages = async () => {
+      const counts: { [fileId: string]: number } = {};
+      for (const fs of selectedFiles) {
+        try {
+          counts[fs.id] = await getActualPageCount(fs.file);
+        } catch {
+          counts[fs.id] = 1;
+        }
+      }
+      setFilePageCounts(counts);
+    };
+    if (selectedFiles.length > 0) countPages();
+    else setFilePageCounts({});
+  }, [selectedFiles]);
 
   const handleCancelJob = (id: string) => {
     setCancelConfirm({ isOpen: true, jobId: id });
@@ -166,7 +202,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
   const isOfficeFile = (file: File) => isOfficeType(file.type);
 
   // Helper to calculate price with discount for a file
-  const getFilePriceWithDiscount = (file: File) => {
+  const getFilePriceWithDiscount = (file: File, fileId?: string) => {
     if (!shopSettings) return null;
     if (isOfficeFile(file)) return null;
 
@@ -183,8 +219,10 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
       ? (printPreferences.colorMode === "blackWhite" ? paperType.blackWhitePerPage : paperType.colorPerPage)
       : (printPreferences.colorMode === "blackWhite" ? (shopSettings.pricing?.blackWhitePerPage ?? 15.0) : (shopSettings.pricing?.colorPerPage ?? 30.0));
 
-    // Estimate page count
-    const estimatedPages = file.type.includes("pdf")
+    // Estimate page count (use actual count if available)
+    const estimatedPages = fileId && filePageCounts[fileId]
+      ? filePageCounts[fileId]
+      : file.type.includes("pdf")
       ? Math.max(1, Math.ceil(file.size / 75000))
       : file.type.includes("image")
       ? 1
@@ -487,6 +525,18 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
             </svg>
             {isRtl ? "إنشاء رمز QR" : "Generate QR Code"}
           </Button>
+          {shopSettings && (shopSettings.phoneNumbers?.length > 0 || shopSettings.email || shopSettings.address) && (
+            <Button
+              variant="link"
+              onClick={() => setStoreInfoOpen(true)}
+              className="gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              {isRtl ? "معلومات المحل" : "Store Info"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -813,7 +863,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex flex-wrap gap-x-2">
                         <span>{formatSize(fileStatus.file.size)}</span>
                         {(() => {
-                          const priceInfo = getFilePriceWithDiscount(fileStatus.file);
+                          const priceInfo = getFilePriceWithDiscount(fileStatus.file, fileStatus.id);
                           if (priceInfo === null && isOfficeFile(fileStatus.file)) {
                             return <span className="text-red-500 dark:text-red-400 text-[10px]">{isRtl ? "لا يمكن حساب الصفحات" : "Can't count pages"}</span>;
                           }
@@ -831,7 +881,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                       </p>
                     </div>
                   </div>
-                  {!isUploading && fileStatus.status === "pending" && (
+                  {!isUploading && fileStatus.status !== "success" && (
                     <button
                       type="button"
                       onClick={() => removeFile(fileStatus.id)}
@@ -904,7 +954,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                   let totalFinal = 0;
 
                   selectedFiles.forEach((fileStatus) => {
-                    const priceInfo = getFilePriceWithDiscount(fileStatus.file);
+                    const priceInfo = getFilePriceWithDiscount(fileStatus.file, fileStatus.id);
                     if (priceInfo) {
                       totalOriginal += priceInfo.original;
                       totalDiscount += priceInfo.discount;
@@ -1023,6 +1073,33 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
               <Card key={job.id}>
                 <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  {/* File type icon */}
+                  <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                    {job.fileType.includes("pdf") ? (
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        <text x="12" y="16" textAnchor="middle" fontSize="7" fontWeight="bold" fill="currentColor">PDF</text>
+                      </svg>
+                    ) : job.fileType.includes("word") || job.fileType.includes("document") ? (
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        <text x="12" y="16" textAnchor="middle" fontSize="6" fontWeight="bold" fill="currentColor">DOC</text>
+                      </svg>
+                    ) : job.fileType.includes("excel") || job.fileType.includes("spreadsheet") ? (
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        <text x="12" y="16" textAnchor="middle" fontSize="6" fontWeight="bold" fill="currentColor">XLS</text>
+                      </svg>
+                    ) : job.fileType.includes("image") ? (
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </div>
                   <div
                     className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 ${job.status === PrintStatus.PRINTED
                       ? "bg-green-100 text-green-600 dark:text-green-400"
@@ -1091,22 +1168,54 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                           </p>
                         </>
                       ) : null}
+                      {job.printPreferences && (
+                        <>
+                          <span className="w-1 h-1 rounded-full bg-gray-300 hidden sm:inline-block"></span>
+                          <span className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                            </svg>
+                            {job.printPreferences.colorMode === "blackWhite" ? (isRtl ? "أبيض وأسود" : "B&W") : (isRtl ? "ملون" : "Color")}
+                          </span>
+                          <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                            {job.printPreferences.copies}x
+                          </span>
+                          <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 capitalize">
+                            {(() => {
+                              const pt = (shopSettings?.paperTypes || []).find(p => p.id === job.printPreferences?.paperType);
+                              if (pt) return isRtl ? pt.nameAr : pt.name;
+                              switch (job.printPreferences?.paperType) {
+                                case "glossy": return isRtl ? "لامع" : "Glossy";
+                                case "cardboard": return isRtl ? "مقوى" : "Cardboard";
+                                default: return isRtl ? "عادي" : "Normal";
+                              }
+                            })()}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <div className="flex items-center gap-2">
-                    {(shopSettings?.pricing || (shopSettings?.paperTypes && shopSettings.paperTypes.length > 0)) && (
-                      <span className="text-sm font-black text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-2.5 py-1 rounded-md border border-green-200 dark:border-green-800/30 shadow-sm dark:shadow-gray-900/50 whitespace-nowrap tracking-tight">
-                        {formatPrice(
-                          calculatePrintPrice(
-                            job,
-                            shopSettings,
-                            jobPageCounts[job.id] || 1,
-                          ).totalPrice,
-                        )}
-                      </span>
-                    )}
+                    {(shopSettings?.pricing || (shopSettings?.paperTypes && shopSettings.paperTypes.length > 0)) && !!jobPageCounts[job.id] && !isOfficeType(job.fileType) && (() => {
+                      const basePrice = calculatePrintPrice(job, shopSettings, jobPageCounts[job.id] || 1).totalPrice;
+                      const discountResult = calculateJobDiscount(job, basePrice, jobPageCounts[job.id] || 1, discountRules);
+                      const hasDiscount = discountResult.discountAmount > 0;
+                      return (
+                        <span className={`text-sm font-black px-2.5 py-1 rounded-md border shadow-sm dark:shadow-gray-900/50 whitespace-nowrap tracking-tight ${hasDiscount ? "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/30" : "text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/30"}`}>
+                          {hasDiscount ? (
+                            <span className="flex items-center gap-1.5">
+                              <span className="line-through text-gray-400 dark:text-gray-500 text-[10px]">{formatPrice(basePrice)}</span>
+                              <span>{formatPrice(discountResult.finalAmount)}</span>
+                              <span className="text-[10px] bg-green-200 dark:bg-green-800/40 text-green-800 dark:text-green-300 px-1 py-0.5 rounded">-{discountResult.discountAmount.toFixed(0)} DZD</span>
+                            </span>
+                          ) : (
+                            formatPrice(basePrice)
+                          )}
+                        </span>
+                      );
+                    })()}
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${job.status === PrintStatus.PRINTED
                         ? "bg-green-100 text-green-700 dark:text-green-400"
@@ -1322,21 +1431,90 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
       <AlertDialog open={cancelConfirm.isOpen} onOpenChange={(open) => { if (!open) setCancelConfirm({ isOpen: false, jobId: null }); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{isRtl ? "إلغاء الطباعة" : "Cancel Print Job"}</AlertDialogTitle>
+            <AlertDialogTitle>{isRtl ? "حذف هذا الملف؟" : "Delete this file?"}</AlertDialogTitle>
             <AlertDialogDescription>
               {isRtl
-                ? "هل أنت متأكد من إلغاء هذه الطباعة؟"
-                : "Are you sure you want to cancel this print job?"}
+                ? "سيتم حذف هذا الملف بشكل دائم. لا يمكن التراجع عن هذا الإجراء."
+                : "This file will be permanently deleted. This action cannot be undone."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{isRtl ? "تراجع" : "Keep"}</AlertDialogCancel>
+            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>{isRtl ? "إلغاء" : "Cancel"}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmCancelJob} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {isRtl ? "إلغاء" : "Cancel"}
+              {isRtl ? "حذف" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Store Info Dialog */}
+      <Dialog open={storeInfoOpen} onOpenChange={setStoreInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{shopSettings?.shopName || "PrintShop Hub"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {shopSettings?.phoneNumbers && shopSettings.phoneNumbers.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{isRtl ? "أرقام الهاتف" : "Phone Numbers"}</label>
+                <div className="mt-1 space-y-2">
+                  {shopSettings.phoneNumbers.map((num, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
+                      <span dir="ltr" className="text-sm text-gray-900 dark:text-gray-100">{num}</span>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(num); toast({ title: isRtl ? "تم النسخ" : "Copied" }); }}
+                        className="p-1.5 text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
+                        title={isRtl ? "نسخ" : "Copy"}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {shopSettings?.email && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{isRtl ? "البريد الإلكتروني" : "Email"}</label>
+                <div className="mt-1 flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-900 dark:text-gray-100">{shopSettings.email}</span>
+                  <button
+                    type="button"
+                    onClick={() => { navigator.clipboard.writeText(shopSettings.email!); toast({ title: isRtl ? "تم النسخ" : "Copied" }); }}
+                    className="p-1.5 text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
+                    title={isRtl ? "نسخ" : "Copy"}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+            {shopSettings?.address && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{isRtl ? "العنوان" : "Address"}</label>
+                <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">{shopSettings.address}</p>
+              </div>
+            )}
+            {shopSettings?.workingHours && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{isRtl ? "ساعات العمل" : "Working Hours"}</label>
+                <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">{shopSettings.workingHours}</p>
+              </div>
+            )}
+            {shopSettings?.returnPolicy && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{isRtl ? "سياسة الإرجاع" : "Return Policy"}</label>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{shopSettings.returnPolicy}</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Toaster for notifications */}
       <Toaster />

@@ -173,6 +173,11 @@ class StorageService {
     shopName?: string;
     paperTypes?: import("../types").PaperType[];
     pricing?: { colorPerPage: number; blackWhitePerPage: number; glossyPerPage?: number; cardboardPerPage?: number };
+    phoneNumbers?: string[];
+    email?: string;
+    address?: string;
+    workingHours?: string;
+    returnPolicy?: string;
   }): Promise<void> {
     await this.safeFetch("/api/settings", {
       method: "POST",
@@ -182,9 +187,13 @@ class StorageService {
   }
 
   async deleteJob(id: string): Promise<void> {
-    await this.safeFetch(`/api/jobs/${id}`, { method: "DELETE" });
-    const myJobs = this.getMyJobIds().filter((mid) => mid !== id);
-    localStorage.setItem("my_upload_ids", JSON.stringify(myJobs));
+    const myJobs = this.getMyJobIds();
+    await this.safeFetch(`/api/jobs/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ myIds: myJobs }),
+    });
+    localStorage.setItem("my_upload_ids", JSON.stringify(myJobs.filter((mid) => mid !== id)));
   }
 
   async getSettings(): Promise<ShopSettings> {
@@ -212,9 +221,14 @@ class StorageService {
         paperTypes: Array.isArray(settings?.paperTypes) && settings.paperTypes.length > 0
           ? settings.paperTypes
           : defaultPaperTypes,
+        phoneNumbers: Array.isArray(settings?.phoneNumbers) ? settings.phoneNumbers : undefined,
+        email: settings?.email || undefined,
+        address: settings?.address || undefined,
+        workingHours: settings?.workingHours || undefined,
+        returnPolicy: settings?.returnPolicy || undefined,
       };
     } catch (e) {
-      return { shopName: "PrintShop Hub", logoUrl: null };
+      return { shopName: "PrintShop Hub", logoUrl: null, phoneNumbers: [], email: "", address: "", workingHours: "", returnPolicy: "" };
     }
   }
 
