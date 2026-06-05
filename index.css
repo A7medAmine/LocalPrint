@@ -94,6 +94,11 @@ html {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
 .dark ::-webkit-scrollbar-track {
   background: #1E293B;
 }
@@ -105,4 +110,8 @@ html {
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #475569;
+}
+
+.dark ::-webkit-scrollbar-corner {
+  background: #1E293B;
 }

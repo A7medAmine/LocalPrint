@@ -403,6 +403,47 @@ const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const [gmailReplyTemplate, setGmailReplyTemplate] = useState("");
+  const gmailReplyRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertPlaceholder = (placeholder: string) => {
+    const textarea = gmailReplyRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = gmailReplyTemplate.slice(0, start);
+    const after = gmailReplyTemplate.slice(end);
+    const next = before + placeholder + after;
+    setGmailReplyTemplate(next);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
+    });
+  };
+
+  const handleImportGmailJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        const web = data.web || data.installed || data;
+        if (web.client_id || web.clientId) {
+          setGmailClientId(web.client_id || web.clientId);
+        }
+        if (web.client_secret || web.clientSecret) {
+          setGmailClientSecret(web.client_secret || web.clientSecret);
+        }
+        if (data.replyTemplate) setGmailReplyTemplate(data.replyTemplate);
+        setGmailShowCredentials(true);
+        toast({ title: isRtl ? "تم استيراد الإعدادات" : "Settings imported successfully", variant: "success" });
+      } catch {
+        toast({ title: isRtl ? "خطأ في قراءة الملف" : "Invalid JSON file", variant: "destructive" });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
 
   const handleSaveReplyTemplate = async () => {
     try {
@@ -1889,7 +1930,7 @@ const AdminView: React.FC<AdminViewProps> = ({
               <CardContent className="space-y-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${gmailConnected ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-300 dark:bg-gray-600'}`} />
+                    <div className={`w-3 h-3 rounded-full ${gmailConnected ? 'bg-green-500 dark:bg-green-400' : 'bg-gray-300 dark:bg-gray-500'}`} />
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                       {gmailConnected
                         ? (isRtl ? `متصل: ${gmailEmail}` : `Connected: ${gmailEmail}`)
@@ -1949,6 +1990,14 @@ const AdminView: React.FC<AdminViewProps> = ({
 
                 {gmailShowCredentials && (
                   <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{isRtl ? "بيانات الاعتماد" : "Credentials"}</span>
+                      <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        {isRtl ? "استيراد JSON" : "Import JSON"}
+                        <input type="file" accept=".json,application/json" onChange={handleImportGmailJson} className="hidden" />
+                      </label>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Google Client ID</label>
@@ -1969,15 +2018,25 @@ const AdminView: React.FC<AdminViewProps> = ({
 
                 {/* Auto-reply Template */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                    {isRtl ? "قالب الرد التلقائي" : "Auto-reply Template"}
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    {isRtl
-                      ? "يمكنك استخدام: {shopName}, {fileName}, {fileCount}, {estimatedPrice}"
-                      : "Available placeholders: {shopName}, {fileName}, {fileCount}, {estimatedPrice}"}
-                  </p>
-                  <textarea value={gmailReplyTemplate} onChange={(e) => setGmailReplyTemplate(e.target.value)} rows={4} className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg p-2 resize-none" placeholder={isRtl ? "اكتب قالب الرد هنا..." : "Write your reply template here..."} />
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {isRtl ? "قالب الرد التلقائي" : "Auto-reply Template"}
+                    </h4>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{isRtl ? "انقر للإدراج" : "Click to insert"}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {["{shopName}", "{fileName}", "{fileCount}", "{estimatedPrice}"].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => insertPlaceholder(v)}
+                        className="px-2 py-0.5 text-xs font-mono bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-md hover:bg-indigo-200 dark:hover:bg-indigo-800/60 transition-colors active:scale-95"
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea ref={gmailReplyRef} value={gmailReplyTemplate} onChange={(e) => setGmailReplyTemplate(e.target.value)} rows={4} className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg p-2 resize-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" placeholder={isRtl ? "اكتب قالب الرد هنا..." : "Write your reply template here..."} />
                   <div className="flex justify-end mt-2">
                     <Button size="sm" variant="outline" onClick={handleSaveReplyTemplate}>
                       {isRtl ? "حفظ القالب" : "Save Template"}
@@ -2105,14 +2164,14 @@ const AdminView: React.FC<AdminViewProps> = ({
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <label className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "الألوان" : "Color"}</label>
-                                  <select value={ov.colorMode} onChange={e => updateGmailOverride(key, 'colorMode', e.target.value)} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 h-8">
+                                  <select value={ov.colorMode} onChange={e => updateGmailOverride(key, 'colorMode', e.target.value)} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 h-8 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                                     <option value="color">{isRtl ? "ملون" : "Color"}</option>
                                     <option value="blackWhite">{isRtl ? "أبيض وأسود" : "B&W"}</option>
                                   </select>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <label className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "الورق" : "Paper"}</label>
-                                  <select value={ov.paperType} onChange={e => updateGmailOverride(key, 'paperType', e.target.value)} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 h-8">
+                                  <select value={ov.paperType} onChange={e => updateGmailOverride(key, 'paperType', e.target.value)} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 h-8 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                                     {paperTypes.map(pt => (
                                       <option key={pt.id} value={pt.id}>{isRtl ? (pt.nameAr || pt.name) : pt.name}</option>
                                     ))}
