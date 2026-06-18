@@ -1,17 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import * as pdfjsLib from "pdfjs-dist";
 
-let pdfjsLib: any = null;
-
-async function loadPdfjs() {
-  if (pdfjsLib) return pdfjsLib;
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url,
-  ).toString();
-  pdfjsLib = pdfjs;
-  return pdfjsLib;
-}
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString();
 
 interface PdfRendererProps {
   src: string;
@@ -38,13 +31,12 @@ const PdfRenderer: React.FC<PdfRendererProps> = ({ src }) => {
       try {
         setLoading(true);
         setError(null);
-        const pdfjs = await loadPdfjs();
         const data = await fetch(src).then((r) => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.arrayBuffer();
         });
         if (cancelled) return;
-        const doc = await pdfjs.getDocument({ data }).promise;
+        const doc = await pdfjsLib.getDocument({ data }).promise;
         if (cancelled) return;
         setPdf(doc);
         setPageCount(doc.numPages);

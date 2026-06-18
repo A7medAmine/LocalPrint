@@ -1,8 +1,9 @@
 {
   "name": "printshop-hub",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "start": "cross-env NODE_ENV=production node server.js",
     "dev": "cross-env NODE_ENV=development concurrently \"vite\" \"node server.js\"",
@@ -10,7 +11,93 @@
     "preview": "vite preview",
     "server": "node server.js",
     "frontend": "vite",
-    "backend": "node server.js"
+    "backend": "node server.js",
+    "electron": "npm run build && cross-env NODE_ENV=production electron .",
+    "electron:dev": "npm run build && cross-env NODE_ENV=development ELECTRON_DEV=true electron .",
+    "electron:pack": "npm run build && electron-builder --dir",
+    "electron:dist": "npm run build && electron-builder",
+    "electron:dist:win": "npm run build && electron-builder --win",
+    "electron:dist:mac": "npm run build && electron-builder --mac",
+    "electron:dist:linux": "npm run build && electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.printshop.hub",
+    "productName": "PrintShop Hub",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "server.js",
+      "db.js",
+      "services/**/*",
+      "utils/**/*",
+      "components/**/*",
+      "views/**/*",
+      "lib/**/*",
+      "public/**/*",
+      "constants.tsx",
+      "types.ts",
+      "index.html",
+      "index.css",
+      "index.tsx",
+      "App.tsx",
+      "tailwind.min.js",
+      "tailwind.config.js",
+      "postcss.config.js",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**"
+    ],
+    "extraResources": [
+      {
+        "from": "public/",
+        "to": "public/",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/favicon/favicon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "PrintShop Hub"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "public/favicon/favicon.ico",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/favicon/favicon.ico",
+      "category": "Office"
+    }
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -49,6 +136,8 @@
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

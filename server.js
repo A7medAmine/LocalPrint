@@ -110,14 +110,25 @@ const ALLOWED_MIMES = new Set([
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Environment configuration
-const NODE_ENV = process.env.NODE_ENV || "development";
-const isDev = NODE_ENV === "development";
+const isDev = process.env.NODE_ENV === "development" || process.env.ELECTRON_DEV === "true";
+
 const PORT = process.env.PORT || (isDev ? 3001 : 3000);
 
-// Path configuration
+const dataDir = process.env.PS_DATA_DIR || __dirname;
 const DIST_DIR = path.join(__dirname, "dist");
 const UPLOADS_DIR = path.join(__dirname, "uploads");
+const OLD_UPLOADS_DIR = process.env.PS_DATA_DIR ? path.join(process.env.PS_DATA_DIR, "uploads") : null;
+const DB_PATH = path.join(dataDir, "database.sqlite");
+
+function findFile(filename) {
+  const dirs = [UPLOADS_DIR];
+  if (OLD_UPLOADS_DIR && OLD_UPLOADS_DIR !== UPLOADS_DIR) dirs.push(OLD_UPLOADS_DIR);
+  for (const dir of dirs) {
+    const fp = path.resolve(path.join(dir, filename));
+    if (fp.startsWith(path.resolve(dir)) && fs.existsSync(fp)) return fp;
+  }
+  return null;
+}
 
 const app = express();
 
@@ -609,11 +620,10 @@ app.post("/api/jobs/bulk/payment", requireAdmin, (req, res) => {
 
 // Database backup download
 app.get("/api/backup/download", requireAdmin, (req, res) => {
-  const dbPath = path.join(__dirname, 'database.sqlite');
-  if (!fs.existsSync(dbPath)) {
+  if (!fs.existsSync(DB_PATH)) {
     return res.status(404).json({ success: false, error: "Database not found" });
   }
-  res.download(dbPath, `printshop-backup-${new Date().toISOString().slice(0, 10)}.sqlite`);
+  res.download(DB_PATH, `printshop-backup-${new Date().toISOString().slice(0, 10)}.sqlite`);
 });
 
 // Database backup restore
@@ -621,13 +631,12 @@ app.post("/api/backup/restore", requireAdmin, uploadMemory.single("file"), (req,
   if (!req.file) {
     return res.status(400).json({ success: false, error: "No file uploaded" });
   }
-  const _dbPath = path.join(__dirname, 'database.sqlite');
-  const _backupPath = _dbPath + '.before_restore';
+  const _backupPath = DB_PATH + '.before_restore';
   // Close the current connection before writing
   try { db.close(); } catch (e) {}
   try {
-    if (fs.existsSync(_dbPath)) {
-      fs.copyFileSync(_dbPath, _backupPath);
+    if (fs.existsSync(DB_PATH)) {
+      fs.copyFileSync(DB_PATH, _backupPath);
     }
     fs.writeFileSync(_dbPath, req.file.buffer);
     reopenDb();
@@ -653,7 +662,9 @@ app.get("/api/files/public/:id", (req, res) => {
     if (fs.existsSync(filePath)) {
       const safeName = job.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
       res.set("Content-Disposition", `inline; filename="${safeName}"`);
-      res.sendFile(filePath);
+      res.sendFile(filePath, (err) => {
+        if (err && !res.headersSent) res.status(404).json({ error: "File not found" });
+      });
     } else {
       res.status(404).json({ error: "File not found" });
     }
@@ -672,7 +683,9 @@ app.get(/^\/api\/files\/(.+)/, requireAdmin, (req, res) => {
   }
 
   if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: "File not found" });
+    });
   } else {
     res.status(404).json({ error: "File not found" });
   }
@@ -687,7 +700,9 @@ app.get("/api/logo", (req, res) => {
   if (!filePath.startsWith(path.resolve(UPLOADS_DIR)) || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: "Logo not found" });
   }
-  res.sendFile(filePath);
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: "Logo not found" });
+  });
 });
 
 // Get settings
@@ -1464,11 +1479,12 @@ if (!isDev) {
 /**
  * SERVER STARTUP
  */
-const HOST = process.env.HOST || "127.0.0.1";
+const HOST = process.env.HOST || "0.0.0.0";
 
 app.listen(PORT, HOST, () => {
   console.log("\n🚀 Server started successfully!");
-  console.log(`📦 Environment: ${NODE_ENV}`);
+  const env = process.env.NODE_ENV || "production";
+  console.log(`📦 Environment: ${env}`);
   console.log(`🌐 Server URL: http://${HOST}:${PORT}`);
 
   if (isDev) {
