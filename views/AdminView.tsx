@@ -45,6 +45,7 @@ import {
 } from "../components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import PreviewModal from "../components/preview/PreviewModal";
+import LanguageToggle from "../components/LanguageToggle";
 
 interface AdminViewProps {
   lang: Language;
@@ -52,6 +53,8 @@ interface AdminViewProps {
   onSettingsUpdate: (settings: ShopSettings) => void;
   currentSettings: ShopSettings;
   darkMode?: boolean;
+  onToggleDarkMode?: () => void;
+  onToggleLang?: (lang: Language) => void;
 }
 
 interface CustomerGroup {
@@ -68,6 +71,8 @@ const AdminView: React.FC<AdminViewProps> = ({
   onSettingsUpdate,
   currentSettings,
   darkMode = false,
+  onToggleDarkMode,
+  onToggleLang,
 }) => {
   // Safe translation function
   const t = (key: string) => {
@@ -141,6 +146,7 @@ const AdminView: React.FC<AdminViewProps> = ({
   const [gmailShowCredentials, setGmailShowCredentials] = useState(false);
 
   const [gmailLastPolledAt, setGmailLastPolledAt] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [gmailIsPolling, setGmailIsPolling] = useState(false);
   const [gmailReviewOpen, setGmailReviewOpen] = useState(false);
   const [gmailFilterText, setGmailFilterText] = useState("");
@@ -1158,178 +1164,280 @@ const AdminView: React.FC<AdminViewProps> = ({
     );
   };
 
+  const navItems = [
+    { id: "dashboard", label: isRtl ? "لوحة المعلومات" : "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
+    { id: "settings", label: t("settings"), icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" },
+    { id: "gmail", label: isRtl ? "البريد الإلكتروني" : "Email", icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" },
+  ];
+
+  const activeNav = activeTab === "gmail" ? "gmail" : activeTab === "settings" ? "settings" : "dashboard";
+
   return (
-    <div
-      className={`max-w-7xl mx-auto px-4 pb-32 text-gray-900 dark:text-gray-100 ${
-        isRtl ? "rtl text-right" : ""
-      }`}
-    >
-      {editingJob && editingBlob && (
-        <ImageEditor
-          imageBlob={editingBlob}
-          lang={lang}
-          onSave={handleSaveEditedImage}
-          onCancel={() => {
-            setEditingJob(null);
-            setEditingBlob(null);
-          }}
+    <div className="flex h-screen overflow-hidden bg-[#F8FAFC] dark:bg-gray-950">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Bulk Action Bar */}
-      {selectedJobIds.size > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[90] bg-gray-900/90 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 animate-slide-up border border-white/10 max-w-[95vw] md:max-w-max">
-          <div className="flex items-center gap-3 border-r border-white/20 pr-6 mr-2">
-            <span className="bg-indigo-50 dark:bg-indigo-900/20 text-white dark:text-gray-100 w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm">
-              {selectedJobIds.size}
-            </span>
-            <span className="text-sm font-medium whitespace-nowrap">
-              {t("selectedItems")}
-            </span>
+      {/* Sidebar */}
+      <aside
+        className={`fixed md:static inset-y-0 left-0 z-50 w-[220px] flex-shrink-0 flex flex-col bg-gray-50 dark:bg-[#111] border-r border-gray-200 dark:border-gray-800 transition-transform duration-250 ease md:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } ${isRtl ? "font-['IBMPlexArabic']" : ""}`}
+      >
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-4 py-5">
+          <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white overflow-hidden shadow-sm flex-shrink-0">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm-1 9H8v2h4v-2z" clipRule="evenodd" />
+            </svg>
           </div>
-
-          <div className="flex items-center gap-2 md:gap-4">
-            <Button variant="ghost" size="sm" onClick={handleBulkPrint} title={t("bulkPrint")} className="flex-col gap-1 h-auto text-inherit hover:text-indigo-400 dark:hover:text-indigo-300">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("print")}</span>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleBulkDownload} title={t("bulkDownload")} className="flex-col gap-1 h-auto text-inherit hover:text-indigo-400 dark:hover:text-indigo-300">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("download")}</span>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.PRINTED)} title={t("markAsPrinted")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400 dark:hover:text-green-300">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("printed")}</span>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.READY)} title={t("markReady")} className="flex-col gap-1 h-auto text-inherit hover:text-blue-400 dark:hover:text-blue-300">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("ready")}</span>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.PAID)} title={t("markPaid")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400 dark:hover:text-green-300">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("paid")}</span>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.UNPAID)} title={t("markUnpaid")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400 dark:hover:text-red-300">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("unpaid")}</span>
-            </Button>
-            {(() => {
-              const allJobs = groups.flatMap(g => g.jobs);
-              const selectedJobs = allJobs.filter(j => selectedJobIds.has(j.id));
-              const selectedImages = selectedJobs.filter(j => j.fileType?.startsWith("image/"));
-              const showCardBtn = selectedImages.length === 2 && selectedJobs.length === 2;
-              return showCardBtn ? (
-                <Button variant="ghost" size="sm" onClick={() => {
-                  const [front, back] = selectedImages;
-                  sessionStorage.setItem("ps_card_front", front.id);
-                  sessionStorage.setItem("ps_card_back", back.id);
-      navigate("/admin/studio");
-                }} title="Print as Card" className="flex-col gap-1 h-auto text-inherit hover:text-pink-400 dark:hover:text-pink-300">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
-                  <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{isRtl ? "بطاقة" : "Card"}</span>
-                </Button>
-              ) : null;
-            })()}
-            <Button variant="ghost" size="sm" onClick={handleBulkDelete} title={t("bulkDelete")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400 dark:hover:text-red-300">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("delete")}</span>
-            </Button>
-          </div>
-
-          <Button variant="ghost" size="icon" onClick={() => setSelectedJobIds(new Set())} className="ml-4 text-white hover:bg-white dark:bg-gray-800/10">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-          </Button>
+          <span dir="auto" className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-100 truncate">
+            {currentSettings.shopName || TRANSLATIONS.appTitle[lang]}
+          </span>
         </div>
-      )}
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t("dashboard")}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {isRtl
-              ? "إدارة المحل وطلبات الطباعة"
-              : "Manage your shop and print requests"}
-          </p>
+        {/* Section: MAIN */}
+        <div className="px-4 pt-6 pb-1">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+            {isRtl ? "رئيسي" : "MAIN"}
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => (navigate("/admin/studio"))}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+
+        {/* Nav items */}
+        <nav className="flex-1 px-3 py-2 space-y-0.5">
+          {navItems.map((item) => {
+            const isActive = activeNav === item.id || (activeNav === "jobs" && item.id === "dashboard");
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (item.id !== "dashboard") setActiveTab(item.id as any);
+                  else setActiveTab("jobs");
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ease ${
+                  isActive
+                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                  <path d={item.icon} />
+                </svg>
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Section: TOOLS */}
+        <div className="px-4 pt-2 pb-1">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+            {isRtl ? "أدوات" : "TOOLS"}
+          </span>
+        </div>
+
+        <nav className="px-3 pb-2 space-y-0.5">
+          <button
+            onClick={() => { navigate("/admin/studio"); setSidebarOpen(false); }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/[0.06] transition-colors duration-150 ease"
+          >
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
             {isRtl ? "استوديو الطباعة" : "Print Studio"}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-            {t("logout")}
-          </Button>
+          </button>
+        </nav>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Help Card */}
+        <div className="px-3 pb-3">
+          <div className="bg-white/60 dark:bg-white/[0.06] rounded-xl p-3.5 border border-gray-200 dark:border-white/10">
+            <div className="flex items-start gap-2.5 mb-2.5">
+              <svg className="w-4 h-4 mt-0.5 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 11-12.728 0 9 9 0 0112.728 0zM12 8v4m0 4h.01" />
+              </svg>
+              <div>
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 leading-tight">
+                  {isRtl ? "تحتاج مساعدة؟" : "Need help?"}
+                </p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
+                  {isRtl ? "فريقنا جاهز للمساعدة" : "Our team is here to help"}
+                </p>
+              </div>
+            </div>
+            <button className="w-full text-xs font-semibold py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors">
+              {isRtl ? "اتصل بالدعم" : "Contact Support"}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="flex border-b border-gray-100 dark:border-gray-800 mb-5 gap-1">
-        <Button
-          variant={activeTab === "jobs" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveTab("jobs")}
-        >
-          {t("jobs")}
-        </Button>
-        <Button
-          variant={activeTab === "settings" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveTab("settings")}
-        >
-          {t("settings")}
-        </Button>
-        <Button
-          variant={activeTab === "gmail" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveTab("gmail")}
-        >
-          <svg className="w-4 h-4 mr-1.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M22.288 5.292A1.2 1.2 0 0021.6 4.8H2.4a1.2 1.2 0 00-.688.492l10.288 7.712 10.288-7.712zM21.6 7.2l-9.6 7.2L2.4 7.2v9.6a1.2 1.2 0 001.2 1.2h16.8a1.2 1.2 0 001.2-1.2V7.2z"/>
-          </svg>
-          {isRtl ? "البريد الإلكتروني" : "Email"}
-        </Button>
-      </div>
+        {/* Dark mode + Language toggles */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-800">
+          <button
+            onClick={onToggleDarkMode}
+            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/[0.06] transition-colors"
+            aria-label={lang === "ar" ? "الوضع الليلي" : "Dark mode"}
+          >
+            {darkMode ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
+          {onToggleLang && <LanguageToggle currentLang={lang} onToggle={onToggleLang} />}
+        </div>
+      </aside>
 
-      <div className="min-h-[400px]">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile header with hamburger */}
+        <div className="md:hidden flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-1.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/[0.06]"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {currentSettings.shopName || TRANSLATIONS.appTitle[lang]}
+          </span>
+          <div className="w-5" />
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
+          <div className={`p-8 ${isRtl ? "rtl text-right" : ""} text-gray-900 dark:text-gray-100`}>
+            {editingJob && editingBlob && (
+              <ImageEditor
+                imageBlob={editingBlob}
+                lang={lang}
+                onSave={handleSaveEditedImage}
+                onCancel={() => {
+                  setEditingJob(null);
+                  setEditingBlob(null);
+                }}
+              />
+            )}
+
+            {/* Bulk Action Bar */}
+            {selectedJobIds.size > 0 && (
+              <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[90] bg-gray-900/90 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 animate-slide-up border border-white/10 max-w-[95vw] md:max-w-max">
+                <div className="flex items-center gap-3 border-r border-white/20 pr-6 mr-2">
+                  <span className="bg-indigo-50 dark:bg-indigo-900/20 text-white dark:text-gray-100 w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm">
+                    {selectedJobIds.size}
+                  </span>
+                  <span className="text-sm font-medium whitespace-nowrap">
+                    {t("selectedItems")}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 md:gap-4">
+                  <Button variant="ghost" size="sm" onClick={handleBulkPrint} title={t("bulkPrint")} className="flex-col gap-1 h-auto text-inherit hover:text-indigo-400 dark:hover:text-indigo-300">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("print")}</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleBulkDownload} title={t("bulkDownload")} className="flex-col gap-1 h-auto text-inherit hover:text-indigo-400 dark:hover:text-indigo-300">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("download")}</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.PRINTED)} title={t("markAsPrinted")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400 dark:hover:text-green-300">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("printed")}</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleBulkStatusUpdate(PrintStatus.READY)} title={t("markReady")} className="flex-col gap-1 h-auto text-inherit hover:text-blue-400 dark:hover:text-blue-300">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("ready")}</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.PAID)} title={t("markPaid")} className="flex-col gap-1 h-auto text-inherit hover:text-green-400 dark:hover:text-green-300">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("paid")}</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleBulkPaymentStatus(PaymentStatus.UNPAID)} title={t("markUnpaid")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400 dark:hover:text-red-300">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("unpaid")}</span>
+                  </Button>
+                  {(() => {
+                    const allJobs = groups.flatMap(g => g.jobs);
+                    const selectedJobs = allJobs.filter(j => selectedJobIds.has(j.id));
+                    const selectedImages = selectedJobs.filter(j => j.fileType?.startsWith("image/"));
+                    const showCardBtn = selectedImages.length === 2 && selectedJobs.length === 2;
+                    return showCardBtn ? (
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        const [front, back] = selectedImages;
+                        sessionStorage.setItem("ps_card_front", front.id);
+                        sessionStorage.setItem("ps_card_back", back.id);
+                        navigate("/admin/studio");
+                      }} title="Print as Card" className="flex-col gap-1 h-auto text-inherit hover:text-pink-400 dark:hover:text-pink-300">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                        <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{isRtl ? "بطاقة" : "Card"}</span>
+                      </Button>
+                    ) : null;
+                  })()}
+                  <Button variant="ghost" size="sm" onClick={handleBulkDelete} title={t("bulkDelete")} className="flex-col gap-1 h-auto text-inherit hover:text-red-400 dark:hover:text-red-300">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    <span className="text-[10px] hidden sm:block uppercase tracking-wider font-bold">{t("delete")}</span>
+                  </Button>
+                </div>
+
+                <Button variant="ghost" size="icon" onClick={() => setSelectedJobIds(new Set())} className="ml-4 text-white hover:bg-white dark:bg-gray-800/10">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </Button>
+              </div>
+            )}
+
+      <div className="min-h-0">
         {activeTab === "jobs" ? (
           <>
             {/* Stats Summary Bar */}
             {!loading && groups.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                <div className="bg-white dark:bg-gray-800 rounded-lg px-4 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-600 flex items-center gap-3 min-h-[72px]">
+                  <div className="w-9 h-9 rounded-lg bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-yellow-600 dark:text-yellow-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "قيد الانتظار" : "Pending"}</div>
-                    <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PENDING).length, 0)}</div>
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "جاهز للاستلام" : "Ready"}</div>
-                    <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.READY).length, 0)}</div>
+                  <div className="flex flex-col">
+                    <span className="text-lg font-bold text-yellow-600 dark:text-yellow-200 leading-none">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PENDING).length, 0)}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{isRtl ? "قيد الانتظار" : "Pending"}</span>
                   </div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div className="bg-white dark:bg-gray-800 rounded-lg px-4 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-600 flex items-center gap-3 min-h-[72px]">
+                  <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-blue-600 dark:text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "تمت الطباعة" : "Printed"}</div>
-                    <div className="text-xl font-bold text-green-600 dark:text-green-400">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PRINTED).length, 0)}</div>
+                  <div className="flex flex-col">
+                    <span className="text-lg font-bold text-blue-600 dark:text-blue-200 leading-none">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.READY).length, 0)}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{isRtl ? "جاهز للاستلام" : "Ready"}</span>
                   </div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <div className="bg-white dark:bg-gray-800 rounded-lg px-4 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-600 flex items-center gap-3 min-h-[72px]">
+                  <div className="w-9 h-9 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-green-600 dark:text-green-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{isRtl ? "إجمالي العملاء" : "Customers"}</div>
-                    <div className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{groups.length}</div>
+                  <div className="flex flex-col">
+                    <span className="text-lg font-bold text-green-600 dark:text-green-200 leading-none">{groups.reduce((acc, g) => acc + g.jobs.filter(j => j.status === PrintStatus.PRINTED).length, 0)}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{isRtl ? "تمت الطباعة" : "Printed"}</span>
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg px-4 shadow-sm dark:shadow-gray-900/50 border border-gray-100 dark:border-gray-600 flex items-center gap-3 min-h-[72px]">
+                  <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-lg font-bold text-indigo-600 dark:text-indigo-200 leading-none">{groups.length}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{isRtl ? "إجمالي العملاء" : "Customers"}</span>
                   </div>
                 </div>
               </div>
@@ -1337,7 +1445,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
             {/* Search Bar */}
             {!loading && groups.length > 0 && (
-              <div className="relative mb-4">
+              <div className="relative my-3">
                 <div className={`absolute ${isRtl ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500`}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 </div>
@@ -1371,10 +1479,10 @@ const AdminView: React.FC<AdminViewProps> = ({
               return (
             <>
             {loading ? (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-pulse">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md dark:shadow-gray-800/50 shadow-indigo-100/40 dark:shadow-indigo-900/20 border border-white dark:border-gray-700 overflow-hidden animate-pulse">
-                    <div className="flex items-center px-4 py-3 gap-3">
+                  <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div className="flex items-center px-4 py-3 gap-3 border-b border-gray-100 dark:border-gray-700">
                       <div className="w-4 h-4 rounded bg-gray-200 dark:bg-gray-700 shrink-0" />
                       <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 shrink-0" />
                       <div className="flex-1 space-y-1.5">
@@ -1384,18 +1492,23 @@ const AdminView: React.FC<AdminViewProps> = ({
                       <div className="h-5 w-16 rounded-full bg-gray-200 dark:bg-gray-700" />
                       <div className="h-5 w-5 rounded bg-gray-200 dark:bg-gray-700" />
                     </div>
-                    <div className="border-t border-gray-50 dark:border-gray-800 px-4 py-2 space-y-2">
+                    <div className="px-4 py-2 space-y-2">
                       {[1, 2].map((j) => (
-                        <div key={j} className="flex items-center gap-3 py-1.5">
+                        <div key={j} className="flex items-center gap-3 min-h-[80px] py-2">
                           <div className="w-4 h-4 rounded bg-gray-200 dark:bg-gray-700 shrink-0" />
-                          <div className="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 shrink-0" />
+                          <div className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-700 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="h-3 w-44 rounded-full bg-gray-200 dark:bg-gray-700" />
                             <div className="h-2.5 w-28 rounded-full bg-gray-100 dark:bg-gray-800" />
                           </div>
+                          <div className="h-5 w-16 rounded-full bg-gray-200 dark:bg-gray-700" />
                           <div className="h-5 w-12 rounded-full bg-gray-200 dark:bg-gray-700" />
-                          <div className="h-5 w-5 rounded bg-gray-200 dark:bg-gray-700" />
-                          <div className="h-5 w-5 rounded bg-gray-200 dark:bg-gray-700" />
+                          <div className="flex gap-1">
+                            <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-700" />
+                            <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-700" />
+                            <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-700" />
+                            <div className="w-8 h-8 rounded bg-gray-200 dark:bg-gray-700" />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1403,16 +1516,16 @@ const AdminView: React.FC<AdminViewProps> = ({
                 ))}
               </div>
             ) : groups.length === 0 ? (
-              <div className="p-12 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+              <div className="p-12 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p>{t("noJobs")}</p>
               </div>
             ) : filteredGroups.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                 <svg className="w-10 h-10 mx-auto mb-2 text-gray-300 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <p>{isRtl ? "لا توجد نتائج" : "No results found"}</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {filteredGroups.map((group) => {
                   const isCollapsed = collapsedGroups.has(group.key);
                   const isExpanded = !isCollapsed;
@@ -1437,9 +1550,9 @@ const AdminView: React.FC<AdminViewProps> = ({
                   return (
                     <div
                       key={group.key}
-                      className="bg-white dark:bg-gray-800 rounded-2xl shadow-md dark:shadow-gray-800/50 shadow-indigo-100/40 dark:shadow-indigo-900/20 border border-white dark:border-gray-700 overflow-hidden mb-3 transition-all"
+                      className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-2 transition-all shadow-sm"
                     >
-                      <div className="flex items-center border-b border-gray-50 dark:border-gray-800 bg-white dark:bg-gray-800 group/header">
+                      <div className="flex items-center border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 group/header">
                         <div className="px-4 py-2.5 flex items-center">
                           <input
                             type="checkbox"
@@ -1489,7 +1602,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 pr-4">
+                          <div className="flex items-center gap-3">
                             {customerTotal > 0 && (
                               <div className="flex flex-col items-end">
                                 {customerDiscount > 0 && (
@@ -1497,7 +1610,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                                     {formatPrice(customerTotal + customerDiscount)}
                                   </span>
                                 )}
-                                <span className="text-sm font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-3 py-1 rounded-full border border-green-200 dark:border-green-800/30 shadow-sm dark:shadow-gray-900/50 whitespace-nowrap">
+                                <span className="text-sm font-bold text-green-700 dark:text-green-100 bg-green-100 dark:bg-green-900 px-3 py-1 rounded-full border border-green-200 dark:border-green-800 shadow-sm dark:shadow-gray-900/50 whitespace-nowrap">
                                   {formatPrice(customerTotal)}
                                 </span>
                                 {customerDiscount > 0 && (
@@ -1510,8 +1623,8 @@ const AdminView: React.FC<AdminViewProps> = ({
                             <span
                               className={`px-3 py-1 text-xs font-bold rounded-full ${
                                 pendingCount > 0
-                                  ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                  : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                  ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-100"
+                                  : "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-100"
                               }`}
                             >
                               {group.jobs.length} {isRtl ? "ملف" : "files"}
@@ -1535,11 +1648,11 @@ const AdminView: React.FC<AdminViewProps> = ({
                         </button>
                       </div>
                       {isExpanded && (
-                        <div className="bg-gray-50 dark:bg-gray-900/30 overflow-x-auto">
+                        <div className="overflow-x-auto">
                           <table className="w-full text-left border-collapse">
-                            <thead className="bg-[#F8FAFC] dark:bg-gray-950 border-b border-gray-100 dark:border-gray-800">
+                            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                               <tr>
-                                <th className="px-4 py-2 w-10">
+                                <th className="px-4 py-2.5 w-10">
                                   <input
                                     type="checkbox"
                                     className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 dark:text-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 cursor-pointer"
@@ -1553,36 +1666,36 @@ const AdminView: React.FC<AdminViewProps> = ({
                                   />
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {t("fileName")}
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {isRtl ? "الإعدادات" : "Settings"}
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {isRtl ? "التكلفة" : "Cost"}
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {t("status")}
                                 </th>
                                 <th
-                                  className={`px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
+                                  className={`px-4 py-2.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${isRtl ? "text-right" : ""}`}
                                 >
                                   {t("payment")}
                                 </th>
-                                <th className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                <th className="px-4 py-2.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                                   {t("actions")}
                                 </th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-200">
+                            <tbody className="divide-y divide-gray-100 dark:divide-white/10">
                               {group.jobs.map((job) => {
                                 const isSelected = selectedJobIds.has(job.id);
                                 const ext = getFileExtension(job.fileName);
@@ -1591,13 +1704,13 @@ const AdminView: React.FC<AdminViewProps> = ({
                                 return (
                                   <tr
                                     key={job.id}
-                                    className={`group/row transition-all duration-200 border-b border-gray-50 dark:border-gray-800 last:border-0 ${
+                                    className={`group/row transition-all duration-200 border-b border-gray-100 dark:border-white/10 ${
                                       isSelected
                                         ? "bg-indigo-50 dark:bg-indigo-900/20"
-                                        : "hover:bg-white dark:bg-gray-800"
+                                        : "hover:bg-gray-50 dark:hover:bg-gray-800"
                                     }`}
                                   >
-                                    <td className="px-4 py-2">
+                                    <td className="px-4 py-2 align-middle">
                                       <input
                                         type="checkbox"
                                         className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 dark:text-indigo-400 focus:ring-indigo-500 dark:focus:ring-indigo-400 cursor-pointer"
@@ -1605,31 +1718,31 @@ const AdminView: React.FC<AdminViewProps> = ({
                                         onChange={() => toggleSelectJob(job.id)}
                                       />
                                     </td>
-                                    <td className="px-4 py-2">
-                                      <div className="flex items-center gap-3 w-max">
+                                    <td className="px-4 py-2 min-h-[80px]">
+                                      <div className="flex items-center gap-3 w-full">
                                         <span
                                           className={`text-[10px] font-bold px-2 py-1 rounded-md border flex-shrink-0 ${
                                             ext === "PDF"
-                                              ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-800/30"
+                                              ? "bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-100 border-red-100 dark:border-red-800"
                                               : ext === "DOCX" || ext === "DOC"
-                                                ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/30"
+                                                ? "bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-100 border-blue-100 dark:border-blue-800"
                                                 : officeFile
-                                                  ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50"
-                                                  : "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800/30"
+                                                  ? "bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-100 border-green-200 dark:border-green-800"
+                                                  : "bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-100 border-indigo-100 dark:border-indigo-800"
                                           }`}
                                         >
                                           {ext}
                                         </span>
-                                        <div className="flex flex-col">
+                                        <div className="flex flex-col flex-1 min-w-0">
                                           <span className="flex items-center gap-1.5">
                                             <span
-                                              className="text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[200px] truncate"
+                                              className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate"
                                               title={job.fileName}
                                             >
                                               {job.fileName}
                                             </span>
                                             {job.source === "gmail" && (
-                                              <span className="text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap shrink-0">
+                                              <span className="text-[10px] font-semibold text-green-700 dark:text-green-100 bg-green-100 dark:bg-green-900 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap shrink-0">
                                                 Gmail
                                               </span>
                                             )}
@@ -1642,12 +1755,12 @@ const AdminView: React.FC<AdminViewProps> = ({
                                       {job.notes && (
                                         <div className="mt-2">
                                           {expandedNotes.has(job.id) || !job.id.startsWith("gmail_") ? (
-                                            <div className="text-[11px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-md inline-block font-medium max-w-xs break-words">
+                                            <div className="text-[11px] text-indigo-600 dark:text-indigo-100 bg-indigo-50 dark:bg-indigo-900 px-2 py-1 rounded-md inline-block font-medium max-w-xs break-words">
                                               {job.notes}
                                             </div>
                                           ) : (
                                             <>
-                                              <div className="text-[11px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-md inline-block font-medium max-w-xs break-words">
+                                              <div className="text-[11px] text-indigo-600 dark:text-indigo-100 bg-indigo-50 dark:bg-indigo-900 px-2 py-1 rounded-md inline-block font-medium max-w-xs break-words">
                                                 {job.notes.length > 120 ? job.notes.slice(0, 120) + "..." : job.notes}
                                               </div>
                                               {job.notes.length > 120 && (
@@ -1669,106 +1782,108 @@ const AdminView: React.FC<AdminViewProps> = ({
                                     {/* Settings Cell (Color & Copies) */}
                                     <td className="px-4 py-2 align-top">
                                       {job.printPreferences && (
-                                        <div className="flex flex-col gap-2 w-max">
-                                          <Button
-                                            type="button"
-                                            title={isRtl ? "انقر للتبديل" : "Toggle mode"}
-                                            disabled={savingPrefsJobId === job.id}
-                                            onClick={() => handleToggleColorMode(job)}
-                                            variant={job.printPreferences.colorMode === "blackWhite" ? "secondary" : "default"}
-                                            size="sm"
-                                            className="text-xs h-7 px-2"
-                                          >
-                                            {savingPrefsJobId === job.id ? (
-                                              <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                                            ) : (
-                                              <>
-                                                <span className="text-[10px]">{job.printPreferences.colorMode === "blackWhite" ? "⚫" : "🎨"}</span>
-                                                {job.printPreferences.colorMode === "blackWhite" ? (isRtl ? "أبيض وأسود" : "B&W") : (isRtl ? "ملون" : "Color")}
-                                              </>
-                                            )}
-                                          </Button>
-
-                                          {/* Copies Stepper */}
-                                          {editingCopiesJobId === job.id ? (
-                                            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-0.5 shadow-sm dark:shadow-gray-900/50 w-max">
-                                              <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="w-6 h-6"
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onClick={() => setEditingCopiesValue((v) => Math.max(1, v - 1))}
-                                              >−</Button>
-                                              <Input
-                                                type="number"
-                                                min={1}
-                                                max={100}
-                                                autoFocus
-                                                value={editingCopiesValue}
-                                                onChange={(e) => setEditingCopiesValue(parseInt(e.target.value) || 1)}
-                                                onKeyDown={(e) => {
-                                                  if (e.key === "Enter") handleSaveCopies(job, editingCopiesValue);
-                                                  if (e.key === "Escape") setEditingCopiesJobId(null);
-                                                }}
-                                                onBlur={() => handleSaveCopies(job, editingCopiesValue)}
-                                                className="w-10 text-center text-xs font-semibold h-7 px-0"
-                                              />
-                                              <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="w-6 h-6"
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onClick={() => setEditingCopiesValue((v) => Math.min(100, v + 1))}
-                                              >+</Button>
-                                              <Button
-                                                type="button"
-                                                size="icon"
-                                                className="w-6 h-6 ml-1"
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onClick={() => handleSaveCopies(job, editingCopiesValue)}
-                                              >
-                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                                              </Button>
-                                            </div>
-                                          ) : (
+                                        <div className="flex flex-col gap-1 w-max">
+                                          <div className="flex flex-wrap gap-1">
                                             <Button
                                               type="button"
-                                              variant="outline"
+                                              title={isRtl ? "انقر للتبديل" : "Toggle mode"}
+                                              disabled={savingPrefsJobId === job.id}
+                                              onClick={() => handleToggleColorMode(job)}
+                                              variant={job.printPreferences.colorMode === "blackWhite" ? "secondary" : "default"}
                                               size="sm"
-                                              className="text-xs h-7"
-                                              onClick={() => {
-                                                setEditingCopiesJobId(job.id);
-                                                setEditingCopiesValue(job.printPreferences?.copies || 1);
-                                              }}
+                                              className="text-xs h-7 px-2"
                                             >
-                                              ×{job.printPreferences?.copies || 1} {isRtl ? "نسخ" : "copies"}
+                                              {savingPrefsJobId === job.id ? (
+                                                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                              ) : (
+                                                <>
+                                                  <span className="text-[10px]">{job.printPreferences.colorMode === "blackWhite" ? "⚫" : "🎨"}</span>
+                                                  {job.printPreferences.colorMode === "blackWhite" ? (isRtl ? "أبيض وأسود" : "B&W") : (isRtl ? "ملون" : "Color")}
+                                                </>
+                                              )}
                                             </Button>
-                                          )}
 
-                                          {/* Paper Type Select */}
-                                          <Select
-                                            value={job.printPreferences?.paperType || "normal"}
-                                            onValueChange={(val) => handlePaperTypeChange(job, val)}
-                                          >
-                                            <SelectTrigger disabled={savingPrefsJobId === job.id} className="h-7 text-xs px-2 py-0 border-amber-200 dark:border-amber-800/30 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg font-medium w-auto gap-1 focus:ring-amber-500 dark:focus:ring-amber-400">
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              {paperTypes.map(pt => (
-                                                <SelectItem key={pt.id} value={pt.id}>
-                                                  {isRtl ? pt.nameAr : pt.name}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
+                                            {/* Copies Stepper */}
+                                            {editingCopiesJobId === job.id ? (
+                                              <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-0.5 shadow-sm dark:shadow-gray-900/50 w-max">
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="w-6 h-6"
+                                                  onMouseDown={(e) => e.preventDefault()}
+                                                  onClick={() => setEditingCopiesValue((v) => Math.max(1, v - 1))}
+                                                >−</Button>
+                                                <Input
+                                                  type="number"
+                                                  min={1}
+                                                  max={100}
+                                                  autoFocus
+                                                  value={editingCopiesValue}
+                                                  onChange={(e) => setEditingCopiesValue(parseInt(e.target.value) || 1)}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === "Enter") handleSaveCopies(job, editingCopiesValue);
+                                                    if (e.key === "Escape") setEditingCopiesJobId(null);
+                                                  }}
+                                                  onBlur={() => handleSaveCopies(job, editingCopiesValue)}
+                                                  className="w-10 text-center text-xs font-semibold h-7 px-0"
+                                                />
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="w-6 h-6"
+                                                  onMouseDown={(e) => e.preventDefault()}
+                                                  onClick={() => setEditingCopiesValue((v) => Math.min(100, v + 1))}
+                                                >+</Button>
+                                                <Button
+                                                  type="button"
+                                                  size="icon"
+                                                  className="w-6 h-6 ml-1"
+                                                  onMouseDown={(e) => e.preventDefault()}
+                                                  onClick={() => handleSaveCopies(job, editingCopiesValue)}
+                                                >
+                                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                                                </Button>
+                                              </div>
+                                            ) : (
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-xs h-7 px-2"
+                                                onClick={() => {
+                                                  setEditingCopiesJobId(job.id);
+                                                  setEditingCopiesValue(job.printPreferences?.copies || 1);
+                                                }}
+                                              >
+                                                ×{job.printPreferences?.copies || 1} {isRtl ? "نسخ" : "copies"}
+                                              </Button>
+                                            )}
+
+                                            {/* Paper Type Select */}
+                                            <Select
+                                              value={job.printPreferences?.paperType || "normal"}
+                                              onValueChange={(val) => handlePaperTypeChange(job, val)}
+                                            >
+                                              <SelectTrigger disabled={savingPrefsJobId === job.id} className="h-7 text-xs px-2 py-0 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-100 rounded-lg font-medium w-auto gap-1 focus:ring-amber-500 dark:focus:ring-amber-400">
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {paperTypes.map(pt => (
+                                                  <SelectItem key={pt.id} value={pt.id}>
+                                                    {isRtl ? pt.nameAr : pt.name}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
                                         </div>
                                       )}
                                     </td>
 
                                     {/* Cost Cell */}
-                                    <td className="px-4 py-2 align-top w-max">
+                                    <td className="px-4 py-2 align-middle whitespace-nowrap">
                                       {(currentSettings.pricing || (currentSettings.paperTypes && currentSettings.paperTypes.length > 0)) ? (
                                         (() => {
                                           const isOffice = job.fileType?.includes("word") || job.fileType?.includes("document") || job.fileType?.includes("excel") || job.fileType?.includes("spreadsheet") || job.fileType?.includes("presentation") || job.fileType?.includes("powerpoint");
@@ -1779,14 +1894,14 @@ const AdminView: React.FC<AdminViewProps> = ({
                                           const hasDiscount = discountResult.discountAmount > 0;
 
                                           return (
-                                            <div className="flex flex-col gap-2">
+                                            <div className="flex flex-col gap-1">
                                               <div className="flex flex-col">
                                                 {hasDiscount && (
                                                   <span className="text-xs text-gray-400 dark:text-gray-500 line-through">
                                                     {formatPrice(discountResult.originalAmount)}
                                                   </span>
                                                 )}
-                                                <span className={`text-sm font-black bg-green-100 dark:bg-green-900/20 px-2.5 py-1 rounded-md border border-green-200 dark:border-green-800/30 shadow-sm dark:shadow-gray-900/50 w-max inline-block tracking-tight ${hasDiscount ? "text-green-700 dark:text-green-400" : "text-green-700 dark:text-green-400"}`}>
+                                                <span className={`text-sm font-black bg-green-100 dark:bg-[#173404] px-2.5 py-1 rounded-md border border-green-200 dark:border-green-800 shadow-sm dark:shadow-gray-900/50 w-max inline-block tracking-tight ${hasDiscount ? "text-green-700 dark:text-[#C0DD97]" : "text-green-700 dark:text-[#C0DD97]"}`}>
                                                   {formatPrice(discountResult.finalAmount)}
                                                 </span>
                                                 {hasDiscount && discountResult.rule && (
@@ -1795,11 +1910,11 @@ const AdminView: React.FC<AdminViewProps> = ({
                                                   </span>
                                                 )}
                                               </div>
-                                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 font-medium w-max">
+                                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 font-medium">
                                                 <span>
                                                   {isRtl ? "الصفحات:" : "Pages:"}
                                                 </span>
-                                                <span className="font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 px-1.5 py-0.5 rounded shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] text-[11px]">
+                                                <span className="font-bold text-indigo-700 dark:text-indigo-100 bg-indigo-50 dark:bg-indigo-900 border border-indigo-100 dark:border-indigo-800 px-2 py-0.5 rounded text-[11px]">
                                                   {pageCount}
                                                 </span>
                                               </div>
@@ -1812,14 +1927,14 @@ const AdminView: React.FC<AdminViewProps> = ({
                                         </span>
                                       )}
                                     </td>
-                                    <td className="px-4 py-2 align-top">
+                                    <td className="px-4 py-2 align-middle">
                                       <span
                                         className={`px-3 py-1 text-[11px] font-bold rounded-full uppercase tracking-wide inline-block ${
                                           job.status === PrintStatus.PRINTED
-                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                            ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-100 border border-green-200 dark:border-green-800"
                                             : job.status === PrintStatus.READY
-                                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                                            : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                            ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-100 border border-blue-200 dark:border-blue-800"
+                                            : "bg-amber-100 dark:bg-[#412402] text-amber-700 dark:text-[#FAC775] border border-amber-200 dark:border-amber-800"
                                         }`}
                                       >
                                         {job.status === PrintStatus.PRINTED
@@ -1829,14 +1944,14 @@ const AdminView: React.FC<AdminViewProps> = ({
                                           : t("pending")}
                                       </span>
                                     </td>
-                                    <td className="px-4 py-2 align-top">
+                                    <td className="px-4 py-2 align-middle">
                                       <span
                                         className={`px-2 py-1 text-[11px] font-bold rounded-full inline-flex items-center gap-1 cursor-pointer hover:opacity-80 ${
                                           job.paymentStatus === PaymentStatus.PAID
-                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                            ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-100 border border-green-200 dark:border-green-800"
                                             : job.paymentStatus === PaymentStatus.PARTIAL
-                                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-                                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                            ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-100 border border-amber-200 dark:border-amber-800"
+                                            : "bg-red-100 dark:bg-[#501313] text-red-700 dark:text-[#F7C1C1] border border-red-200 dark:border-red-800"
                                         }`}
                                         onClick={() => handlePaymentClick(job)}
                                         title={isRtl ? "انقر لتعديل الدفع" : "Click to edit payment"}
@@ -1856,42 +1971,45 @@ const AdminView: React.FC<AdminViewProps> = ({
                                         ) : null}
                                       </span>
                                     </td>
-                                    <td className="px-4 py-2 align-top">
-                                      <div className="flex flex-wrap gap-1 w-max">
+                                    <td className="px-4 py-2 align-middle">
+                                      <div className="flex items-center gap-0.5 w-max">
                                         {!officeFile && (
-                                          <Button variant="ghost" size="icon" onClick={() => handlePrint(job)} title={t("print")} className="text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-400 dark:hover:text-blue-300">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                                          <Button variant="ghost" size="icon" onClick={() => handlePrint(job)} title={t("print")} className="text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-white/10 w-8 h-8">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                           </Button>
                                         )}
-                                        <Button variant="ghost" size="icon" onClick={() => handlePreview(job)} title={isRtl ? "معاينة" : "Preview"} className="text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 hover:text-emerald-700 dark:hover:text-emerald-400">
-                                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        <Button variant="ghost" size="icon" onClick={() => handlePreview(job)} title={isRtl ? "معاينة" : "Preview"} className="text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-white/10 w-8 h-8">
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                         </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(job)} title={t("edit")} className="text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-700 dark:hover:text-orange-400">
-                                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(job)} title={t("edit")} className="text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-white/10 w-8 h-8">
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                         </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDownload(job)} title={t("download")} className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 dark:hover:text-indigo-300">
-                                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                        <Button variant="ghost" size="icon" onClick={() => handleDownload(job)} title={t("download")} className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-white/10 w-8 h-8">
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                         </Button>
-                                        <Select value={job.status} onValueChange={(val) => handleStatusChange(job.id, val as PrintStatus)}>
-                                          <SelectTrigger className={`h-8 w-9 border-0 p-0 ${job.status === PrintStatus.PRINTED ? "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30" : job.status === PrintStatus.READY ? "text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30" : "text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/30"}`}>
-                                            <SelectValue>
-                                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                            </SelectValue>
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value={PrintStatus.PENDING}>
-                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500 dark:bg-yellow-400 inline-block"></span>{isRtl ? "قيد الانتظار" : "Pending"}</span>
-                                            </SelectItem>
-                                            <SelectItem value={PrintStatus.READY}>
-                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-50 dark:bg-blue-900/20 inline-block"></span>{isRtl ? "جاهز" : "Ready"}</span>
-                                            </SelectItem>
-                                            <SelectItem value={PrintStatus.PRINTED}>
-                                              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-50 dark:bg-green-900/20 inline-block"></span>{isRtl ? "تمت الطباعة" : "Printed"}</span>
-                                            </SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(job.id)} title={t("delete")} className="text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-400 dark:hover:text-red-300">
-                                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        <span className="mx-1 w-px h-6 bg-gray-200 dark:bg-white/20 shrink-0" />
+                                        <span className="group/status relative" title={isRtl ? "تغيير الحالة" : "Change status"}>
+                                          <Select value={job.status} onValueChange={(val) => handleStatusChange(job.id, val as PrintStatus)}>
+                                            <SelectTrigger className={`h-8 w-8 border-0 p-0 ${job.status === PrintStatus.PRINTED ? "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-white/10" : job.status === PrintStatus.READY ? "text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-white/10" : "text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-white/10"}`}>
+                                              <SelectValue>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                              </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value={PrintStatus.PENDING}>
+                                                <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500 dark:bg-yellow-400 inline-block"></span>{isRtl ? "قيد الانتظار" : "Pending"}</span>
+                                              </SelectItem>
+                                              <SelectItem value={PrintStatus.READY}>
+                                                <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>{isRtl ? "جاهز" : "Ready"}</span>
+                                              </SelectItem>
+                                              <SelectItem value={PrintStatus.PRINTED}>
+                                                <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>{isRtl ? "تمت الطباعة" : "Printed"}</span>
+                                              </SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </span>
+                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(job.id)} title={t("delete")} className="text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-white/10 w-8 h-8">
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                         </Button>
                                       </div>
                                     </td>
@@ -2998,6 +3116,9 @@ const AdminView: React.FC<AdminViewProps> = ({
         fileSize={previewJob?.fileSize}
       />
 
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
