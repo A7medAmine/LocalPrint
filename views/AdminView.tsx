@@ -134,16 +134,12 @@ const AdminView: React.FC<AdminViewProps> = ({
   // Gmail integration state
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState("");
-  const [gmailClientId, setGmailClientId] = useState("");
-  const [gmailClientSecret, setGmailClientSecret] = useState("");
-  const [gmailHasSecret, setGmailHasSecret] = useState(false);
   const [gmailPolling, setGmailPolling] = useState(false);
   const [gmailDisconnectConfirm, setGmailDisconnectConfirm] = useState(false);
   const [gmailPollResult, setGmailPollResult] = useState<string | null>(null);
   const [gmailPending, setGmailPending] = useState<any[]>([]);
   const [gmailSelectedIds, setGmailSelectedIds] = useState<Set<number>>(new Set());
   const [gmailImporting, setGmailImporting] = useState(false);
-  const [gmailShowCredentials, setGmailShowCredentials] = useState(false);
 
   const [gmailLastPolledAt, setGmailLastPolledAt] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -192,9 +188,8 @@ const AdminView: React.FC<AdminViewProps> = ({
       ]);
       setGmailConnected(status.connected);
       setGmailEmail(status.email || "");
-      setGmailClientId(settings.clientId || "");
-      setGmailHasSecret(settings.hasClientSecret || false);
       setGmailReplyTemplate(settings.replyTemplate || "");
+      setGmailPollInterval(settings.pollInterval || 60);
     } catch (err) {
       console.error("Failed to load Gmail status:", err);
     }
@@ -286,16 +281,6 @@ const AdminView: React.FC<AdminViewProps> = ({
       console.error("Failed to poll Gmail:", err);
     } finally {
       setGmailPolling(false);
-    }
-  };
-
-  const handleSaveGmailSettings = async () => {
-    try {
-      await storageService.saveGmailSettings(gmailClientId, gmailClientSecret);
-      setGmailHasSecret(true);
-      toast({ title: isRtl ? "تم حفظ إعدادات Gmail" : "Gmail settings saved", variant: "success" });
-    } catch (err) {
-      toast({ title: isRtl ? "فشل حفظ الإعدادات" : "Failed to save settings", variant: "destructive" });
     }
   };
 
@@ -408,6 +393,7 @@ const AdminView: React.FC<AdminViewProps> = ({
     });
   };
 
+  const [gmailPollInterval, setGmailPollInterval] = useState(60);
   const [gmailReplyTemplate, setGmailReplyTemplate] = useState("");
   const gmailReplyRef = useRef<HTMLTextAreaElement>(null);
 
@@ -424,31 +410,6 @@ const AdminView: React.FC<AdminViewProps> = ({
       textarea.focus();
       textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
     });
-  };
-
-  const handleImportGmailJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target?.result as string);
-        const web = data.web || data.installed || data;
-        if (web.client_id || web.clientId) {
-          setGmailClientId(web.client_id || web.clientId);
-        }
-        if (web.client_secret || web.clientSecret) {
-          setGmailClientSecret(web.client_secret || web.clientSecret);
-        }
-        if (data.replyTemplate) setGmailReplyTemplate(data.replyTemplate);
-        setGmailShowCredentials(true);
-        toast({ title: isRtl ? "تم استيراد الإعدادات" : "Settings imported successfully", variant: "success" });
-      } catch {
-        toast({ title: isRtl ? "خطأ في قراءة الملف" : "Invalid JSON file", variant: "destructive" });
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
   };
 
   const handleSaveReplyTemplate = async () => {
@@ -514,7 +475,17 @@ const AdminView: React.FC<AdminViewProps> = ({
 
     // SSE listener — real-time updates
     const es = new EventSource('/api/events');
-    es.addEventListener("gmail-new", () => { loadGmailPending(); });
+    es.addEventListener("gmail-new", (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        const count = data.new || 0;
+        if (count > 0) {
+          toast({ title: `${count} ${isRtl ? "بريد جديد" : "new email(s)"} ${isRtl ? "وصل" : "received"}`, variant: "success" });
+          new Audio('/notification.mp3').play().catch(() => {});
+        }
+      } catch {}
+      loadGmailPending();
+    });
     es.addEventListener("new-job", () => { loadJobs(); });
     es.addEventListener("job-deleted", () => { loadJobs(); });
     es.onerror = () => {};
@@ -2100,39 +2071,44 @@ const AdminView: React.FC<AdminViewProps> = ({
                   </div>
                 )}
 
-                <button type="button" onClick={() => setGmailShowCredentials(!gmailShowCredentials)} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-2">
-                  {gmailShowCredentials
-                    ? (isRtl ? "إخفاء إعدادات OAuth" : "Hide OAuth settings")
-                    : (isRtl ? "إظهار إعدادات OAuth" : "Show OAuth settings")}
-                </button>
-
-                {gmailShowCredentials && (
-                  <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{isRtl ? "بيانات الاعتماد" : "Credentials"}</span>
-                      <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                        {isRtl ? "استيراد JSON" : "Import JSON"}
-                        <input type="file" accept=".json,application/json" onChange={handleImportGmailJson} className="hidden" />
-                      </label>
+                {/* Poll Interval */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {isRtl ? "فترة الفحص التلقائي" : "Auto-check Interval"}
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {isRtl ? "عدد الثواني بين كل فحص للبريد" : "Seconds between each email check"}
+                      </p>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Google Client ID</label>
-                        <Input value={gmailClientId} onChange={(e) => setGmailClientId(e.target.value)} placeholder="xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Google Client Secret</label>
-                        <Input value={gmailClientSecret} onChange={(e) => setGmailClientSecret(e.target.value)} placeholder={gmailHasSecret ? "•••••••• (saved)" : "GOCSPX-xxxxxxxxxxxxxxxxxxxx"} />
-                      </div>
-                    </div>
-                    <div className="flex justify-end">
-                      <Button size="sm" variant="outline" onClick={handleSaveGmailSettings}>
-                        {isRtl ? "حفظ بيانات Gmail" : "Save Gmail Credentials"}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Input
+                        type="number"
+                        min={10}
+                        max={3600}
+                        value={gmailPollInterval}
+                        onChange={(e) => setGmailPollInterval(parseInt(e.target.value) || 60)}
+                        className="w-20 h-8 text-sm text-center"
+                      />
+                      <span className="text-xs text-gray-400 dark:text-gray-500">{isRtl ? "ثانية" : "sec"}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            await storageService.saveGmailPollInterval(gmailPollInterval);
+                            toast({ title: isRtl ? "تم حفظ الفاصل الزمني" : "Interval saved", variant: "success" });
+                          } catch {
+                            toast({ title: isRtl ? "فشل الحفظ" : "Failed to save", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        {isRtl ? "حفظ" : "Save"}
                       </Button>
                     </div>
                   </div>
-                )}
+                </div>
 
                 {/* Auto-reply Template */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -2162,7 +2138,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                   </div>
                 </div>
 
-                {gmailConnected && gmailFilteredPending.length > 0 && (
+                {gmailConnected && gmailPending.length > 0 && (
                   <>
                     <hr className="border-gray-200 dark:border-gray-700" />
                     <div className="border border-gray-100 dark:border-gray-800 rounded-xl max-h-[600px] overflow-y-auto">
@@ -2217,7 +2193,13 @@ const AdminView: React.FC<AdminViewProps> = ({
                             </tr>
                           </thead>
                           <tbody>
-                            {gmailFilteredPending.map((email) => (
+                            {gmailFilteredPending.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="p-6 text-center text-gray-400 dark:text-gray-500 text-sm">
+                                  {isRtl ? "لا توجد رسائل مطابقة" : "No matching emails found"}
+                                </td>
+                              </tr>
+                            ) : gmailFilteredPending.map((email) => (
                               <tr key={email.id} onClick={() => toggleGmailSelection(email.id)} className={`cursor-pointer border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 ${gmailSelectedIds.has(email.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                                 <td className="p-3">
                                   <input type="checkbox" checked={gmailSelectedIds.has(email.id)} onChange={(e) => { e.stopPropagation(); toggleGmailSelection(email.id); }} className="rounded border-gray-300 dark:border-gray-600" />

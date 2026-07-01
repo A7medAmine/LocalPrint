@@ -5,6 +5,7 @@ import PDFJobManager from "./PDFJobManager";
 import { useLanguage } from "../lib/useLanguage";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
+import { Toaster } from "../components/ui/toaster";
 
 type StudioTab = "cards" | "pdf";
 
@@ -55,6 +56,7 @@ const PrintStudio: React.FC = () => {
       <div>
         {tab === "cards" ? <CardIDTool /> : <PDFJobManager />}
       </div>
+      <Toaster />
     </div>
   );
 };

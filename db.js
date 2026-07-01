@@ -251,11 +251,11 @@ export const deleteDiscountRule = (id) => {
  * Token Encryption Helpers
  */
 const ENCRYPTION_KEY = (() => {
-  const stored = db.prepare("SELECT value FROM settings WHERE key = '_encryption_key'").get();
-  if (stored) return Buffer.from(stored.value, 'hex');
-  const key = crypto.randomBytes(32);
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('_encryption_key', key.toString('hex'));
-  return key;
+  const keyHex = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!keyHex) {
+    throw new Error('TOKEN_ENCRYPTION_KEY environment variable is required for token encryption');
+  }
+  return Buffer.from(keyHex, 'hex');
 })();
 
 function encryptToken(plaintext) {
@@ -322,24 +322,6 @@ export const isEmailProcessed = (gmailMessageId) => {
 
 export const markEmailProcessed = (gmailMessageId) => {
   db.prepare('INSERT OR IGNORE INTO processed_emails (gmail_message_id) VALUES (?)').run(gmailMessageId);
-};
-
-export const getGmailClientId = () => {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'google_client_id'").get();
-  return row ? row.value : '';
-};
-
-export const getGmailClientSecret = () => {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'google_client_secret'").get();
-  return row ? row.value : '';
-};
-
-export const saveGmailClientId = (value) => {
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('google_client_id', value);
-};
-
-export const saveGmailClientSecret = (value) => {
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('google_client_secret', value);
 };
 
 /**

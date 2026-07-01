@@ -343,16 +343,8 @@ class StorageService {
     return this.safeFetch("/api/gmail/poll-status");
   }
 
-  async getGmailSettings(): Promise<{ clientId: string; clientSecret: string; hasClientSecret: boolean; pollInterval: number; replyTemplate: string }> {
+  async getGmailSettings(): Promise<{ pollInterval: number; replyTemplate: string }> {
     return this.safeFetch("/api/gmail/settings");
-  }
-
-  async saveGmailSettings(clientId: string, clientSecret: string): Promise<void> {
-    await this.safeFetch("/api/gmail/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId, clientSecret }),
-    });
   }
 
   async getGmailPending(): Promise<any[]> {

@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { getGmailAccount, updateGmailTokens, getGmailClientId, getGmailClientSecret, getSettings } from '../db.js';
+import { getGmailAccount, updateGmailTokens } from '../db.js';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -7,15 +7,16 @@ const SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
 ];
 
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
 let refreshPromise = null;
 
 export function getOAuth2Client(redirectUri) {
-  const clientId = getGmailClientId();
-  const clientSecret = getGmailClientSecret();
-  if (!clientId || !clientSecret) {
-    throw new Error('Google OAuth credentials not configured in settings');
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    throw new Error('Google OAuth credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env');
   }
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri || undefined);
+  return new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, redirectUri || undefined);
 }
 
 export function getAuthUrl(redirectUri) {

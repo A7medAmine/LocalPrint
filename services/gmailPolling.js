@@ -1,6 +1,16 @@
-import { fetchUnreadEmails } from './gmailService.js';
-import { saveAttachment } from './attachmentService.js';
-import db, { getGmailAccount, isEmailProcessed, markEmailProcessed, isEmailPending, addPendingEmail, removePendingEmail, softDeletePendingEmail, getPendingEmailById, getSettings } from '../db.js';
+import { fetchUnreadEmails } from "./gmailService.js";
+import { saveAttachment } from "./attachmentService.js";
+import db, {
+  getGmailAccount,
+  isEmailProcessed,
+  markEmailProcessed,
+  isEmailPending,
+  addPendingEmail,
+  removePendingEmail,
+  softDeletePendingEmail,
+  getPendingEmailById,
+  getSettings,
+} from "../db.js";
 
 let pollingInterval = null;
 const DEFAULT_INTERVAL_MS = 60 * 1000;
@@ -14,12 +24,12 @@ export function setNewEmailCallback(fn) {
 
 function extractBody(payload) {
   if (payload.body && payload.body.data) {
-    return Buffer.from(payload.body.data, 'base64').toString('utf8');
+    return Buffer.from(payload.body.data, "base64").toString("utf8");
   }
   if (payload.parts) {
     for (const part of payload.parts) {
-      if (part.mimeType === 'text/plain' && part.body?.data) {
-        return Buffer.from(part.body.data, 'base64').toString('utf8');
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf8");
       }
     }
     for (const part of payload.parts) {
@@ -27,7 +37,7 @@ function extractBody(payload) {
       if (result) return result;
     }
   }
-  return '';
+  return "";
 }
 
 function extractAttachmentsMeta(payload) {
@@ -35,7 +45,11 @@ function extractAttachmentsMeta(payload) {
   function walk(parts) {
     if (!parts) return;
     for (const part of parts) {
-      if (part.filename && part.filename.length > 0 && part.body?.attachmentId) {
+      if (
+        part.filename &&
+        part.filename.length > 0 &&
+        part.body?.attachmentId
+      ) {
         attachments.push({
           filename: part.filename,
           mimeType: part.mimeType,
@@ -53,14 +67,17 @@ function extractAttachmentsMeta(payload) {
 function parseFromHeader(fromHeader) {
   const match = fromHeader.match(/^(.+?)\s*<(.+@.+)>$/);
   if (match) {
-    return { name: match[1].trim().replace(/^"/, '').replace(/"$/, ''), email: match[2] };
+    return {
+      name: match[1].trim().replace(/^"/, "").replace(/"$/, ""),
+      email: match[2],
+    };
   }
-  return { name: fromHeader || 'Unknown', email: fromHeader || '' };
+  return { name: fromHeader || "Unknown", email: fromHeader || "" };
 }
 
 function getHeader(headers, name) {
-  const h = headers.find(h => h.name === name);
-  return h ? h.value : '';
+  const h = headers.find((h) => h.name === name);
+  return h ? h.value : "";
 }
 
 /**
@@ -69,14 +86,16 @@ function getHeader(headers, name) {
 export async function pollGmail() {
   const account = getGmailAccount();
   if (!account || !account.is_active) {
-    return { error: 'No Gmail account connected' };
+    return { error: "No Gmail account connected" };
   }
 
   try {
     const { messages: emails, truncated } = await fetchUnreadEmails();
     console.log(`📨 Gmail poll: found ${emails.length} unread email(s)`);
     if (truncated) {
-      console.warn('[Gmail] Inbox has more than 100 unread messages — some were skipped this cycle');
+      console.warn(
+        "[Gmail] Inbox has more than 100 unread messages — some were skipped this cycle"
+      );
     }
 
     let newCount = 0;
@@ -91,9 +110,9 @@ export async function pollGmail() {
       }
 
       const headers = msg.payload.headers;
-      const fromHeader = getHeader(headers, 'From');
-      const subject = getHeader(headers, 'Subject');
-      const date = getHeader(headers, 'Date');
+      const fromHeader = getHeader(headers, "From");
+      const subject = getHeader(headers, "Subject");
+      const date = getHeader(headers, "Date");
       const { name, email } = parseFromHeader(fromHeader);
       const body = extractBody(msg.payload);
       const attachments = extractAttachmentsMeta(msg.payload);
@@ -110,7 +129,9 @@ export async function pollGmail() {
 
       newCount++;
       if (attachments.length > 0) {
-        console.log(`  📎 Queued "${subject}" from ${email} (${attachments.length} attachment(s))`);
+        console.log(
+          `  📎 Queued "${subject}" from ${email} (${attachments.length} attachment(s))`
+        );
       }
     }
 
@@ -122,7 +143,7 @@ export async function pollGmail() {
 
     return { new: newCount, skipped: skippedCount };
   } catch (err) {
-    console.error('❌ Gmail poll error:', err.message);
+    console.error("❌ Gmail poll error:", err.message);
     return { error: err.message };
   }
 }
@@ -133,7 +154,7 @@ export async function pollGmail() {
 export async function importPendingEmails(pendingIds, overrides = {}) {
   const account = getGmailAccount();
   if (!account || !account.is_active) {
-    return { error: 'No Gmail account connected' };
+    return { error: "No Gmail account connected" };
   }
 
   const results = [];
@@ -142,41 +163,56 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
     try {
       const pending = getPendingEmailById(id);
       if (!pending) {
-        results.push({ id, error: 'Not found' });
+        results.push({ id, error: "Not found" });
         continue;
       }
 
       const jobs = [];
       const jobFileNames = [];
 
-      for (let attIdx = 0; attIdx < (pending.attachment_meta || []).length; attIdx++) {
+      for (
+        let attIdx = 0;
+        attIdx < (pending.attachment_meta || []).length;
+        attIdx++
+      ) {
         const att = pending.attachment_meta[attIdx];
         try {
-          const gmail = await (await import('./gmailService.js')).getGmailClient();
+          const gmail = await (
+            await import("./gmailService.js")
+          ).getGmailClient();
           const attResponse = await gmail.users.messages.attachments.get({
-            userId: 'me',
+            userId: "me",
             messageId: pending.gmail_message_id,
             id: att.attachmentId,
           });
 
-          const savedPath = await saveAttachment(att.filename, att.mimeType, attResponse.data.data, pending.gmail_message_id);
+          const savedPath = await saveAttachment(
+            att.filename,
+            att.mimeType,
+            attResponse.data.data,
+            pending.gmail_message_id
+          );
           if (!savedPath) continue;
 
-          const jobId = `gmail_${pending.gmail_message_id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const jobId = `gmail_${
+            pending.gmail_message_id
+          }_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
           const overrideKey = `${pending.id}_${attIdx}`;
           const ov = overrides[overrideKey] || {};
-          const colorMode = ov.colorMode || 'color';
+          const colorMode = ov.colorMode || "color";
           const copies = parseInt(ov.copies) || 1;
-          const paperType = ov.paperType || 'normal';
+          const paperType = ov.paperType || "normal";
 
-          db.prepare(`
+          db.prepare(
+            `
             INSERT INTO jobs (
               id, customerName, customerEmail, notes, fileName, fileType,
               fileSize, uploadDate, status, serverFileName, pageCount,
               colorMode, copies, paperType, source
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
+          `
+          ).run(
             jobId,
             pending.email_from,
             pending.email_address,
@@ -185,28 +221,34 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
             att.mimeType,
             att.size || 0,
             new Date().toISOString(),
-            'PENDING',
+            "PENDING",
             savedPath,
             null,
             colorMode,
             copies,
             paperType,
-            'gmail',
+            "gmail"
           );
 
           jobs.push(jobId);
           jobFileNames.push(att.filename);
         } catch (err) {
-          console.error(`  ❌ Failed to import attachment ${att.filename}:`, err.message);
+          console.error(
+            `  ❌ Failed to import attachment ${att.filename}:`,
+            err.message
+          );
         }
       }
 
       // Mark as read & processed
       try {
-        const { markAsRead } = await import('./gmailService.js');
+        const { markAsRead } = await import("./gmailService.js");
         await markAsRead(pending.gmail_message_id);
       } catch (err) {
-        console.warn(`⚠️  Could not mark message ${pending.gmail_message_id} as read:`, err.message);
+        console.warn(
+          `⚠️  Could not mark message ${pending.gmail_message_id} as read:`,
+          err.message
+        );
       }
 
       markEmailProcessed(pending.gmail_message_id);
@@ -218,24 +260,28 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
       // Auto-reply using template
       try {
         const settings = getSettings();
-        const { sendReply } = await import('./gmailService.js');
+        const { sendReply } = await import("./gmailService.js");
         const pricing = settings.pricing || {};
-        const template = settings.gmailReplyTemplate || [
-          `Thank you for your print request!`,
-          ``,
-          `We have received your file(s) and will process them shortly.`,
-          jobs.length > 0 ? `Files received: {fileCount}` : '',
-          `Estimated price: Starting from {estimatedPrice} per page (color)`,
-          ``,
-          `We will notify you when your prints are ready.`,
-          ``,
-          `Best regards,`,
-          `{shopName}`,
-        ].filter(Boolean).join('\n');
-        const fileNames = jobFileNames.join(', ');
+        const template =
+          settings.gmailReplyTemplate ||
+          [
+            `Thank you for your print request!`,
+            ``,
+            `We have received your file(s) and will process them shortly.`,
+            jobs.length > 0 ? `Files received: {fileCount}` : "",
+            `Estimated price: Starting from {estimatedPrice} per page (color)`,
+            ``,
+            `We will notify you when your prints are ready.`,
+            ``,
+            `Best regards,`,
+            `{shopName}`,
+          ]
+            .filter(Boolean)
+            .join("\n");
+        const fileNames = jobFileNames.join(", ");
         const replyBody = template
-          .replace(/\{shopName\}/g, settings.shopName || 'Print Shop')
-          .replace(/\{fileName\}/g, fileNames || 'your file')
+          .replace(/\{shopName\}/g, settings.shopName || "Print Shop")
+          .replace(/\{fileName\}/g, fileNames || "your file")
           .replace(/\{fileCount\}/g, jobs.length.toString())
           .replace(/\{estimatedPrice\}/g, `${pricing.colorPerPage || 30}`);
         await sendReply(pending.gmail_message_id, replyBody);
@@ -268,7 +314,7 @@ export function startPolling(intervalMs) {
   const ms = intervalMs || DEFAULT_INTERVAL_MS;
   console.log(`⏰ Starting Gmail polling every ${ms / 1000}s`);
   pollingInterval = setInterval(() => {
-    pollGmail().catch(err => console.error('❌ Polling error:', err));
+    pollGmail().catch((err) => console.error("❌ Polling error:", err));
   }, ms);
 }
 
@@ -276,7 +322,7 @@ export function stopPolling() {
   if (pollingInterval) {
     clearInterval(pollingInterval);
     pollingInterval = null;
-    console.log('⏹️  Gmail polling stopped');
+    console.log("⏹️  Gmail polling stopped");
   }
 }
 
@@ -284,7 +330,7 @@ export function restartPolling(intervalMs) {
   stopPolling();
   const ms = intervalMs || DEFAULT_INTERVAL_MS;
   pollingInterval = setInterval(() => {
-    pollGmail().catch(err => console.error('❌ Polling error:', err));
+    pollGmail().catch((err) => console.error("❌ Polling error:", err));
   }, ms);
   console.log(`⏰ Restarted Gmail polling every ${ms / 1000}s`);
 }

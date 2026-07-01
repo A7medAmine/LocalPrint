@@ -1129,7 +1129,7 @@ import {
   handleCallback,
 } from './services/gmailService.js';
 import { pollGmail, importPendingEmails, discardPendingEmail, startPolling, stopPolling, setNewEmailCallback } from './services/gmailPolling.js';
-import { getGmailAccount, disconnectGmail, getGmailClientId, getGmailClientSecret, saveGmailClientId, saveGmailClientSecret, getPendingEmails, restorePendingEmail } from './db.js';
+import { getGmailAccount, disconnectGmail, getPendingEmails, restorePendingEmail } from './db.js';
 
 // Get Gmail connection status
 app.get('/api/gmail/status', requireAdmin, (req, res) => {
@@ -1388,14 +1388,11 @@ app.get('/api/gmail/attachment/:pendingId/:attachmentIndex', async (req, res) =>
   }
 });
 
-// Get Gmail settings (client ID/secret)
+// Get Gmail settings (poll interval, reply template)
 app.get('/api/gmail/settings', requireAdmin, (req, res) => {
   try {
     const settings = getSettings();
     res.json({
-      clientId: getGmailClientId(),
-      clientSecret: getGmailClientSecret() ? '********' : '',
-      hasClientSecret: !!getGmailClientSecret(),
       pollInterval: parseInt(settings.gmailPollInterval) || 60,
       replyTemplate: settings.gmailReplyTemplate || '',
     });
@@ -1405,12 +1402,9 @@ app.get('/api/gmail/settings', requireAdmin, (req, res) => {
   }
 });
 
-// Save Gmail settings
+// Save Gmail settings (poll interval, reply template)
 app.post('/api/gmail/settings', requireAdmin, async (req, res) => {
   try {
-    const { clientId, clientSecret } = req.body;
-    if (clientId) saveGmailClientId(clientId);
-    if (clientSecret) saveGmailClientSecret(clientSecret);
     if (req.body.pollInterval) {
       updateSetting('gmailPollInterval', parseInt(req.body.pollInterval));
       const { restartPolling } = await import('./services/gmailPolling.js');
@@ -1429,6 +1423,9 @@ app.post('/api/gmail/settings', requireAdmin, async (req, res) => {
 /**
  * STATIC FILE SERVING & SPA ROUTING
  */
+
+// Serve public/ assets (notification sound, etc.)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve static files in production
 if (!isDev) {

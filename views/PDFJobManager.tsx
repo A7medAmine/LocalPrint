@@ -24,6 +24,7 @@ import {
 } from "../components/ui/dialog";
 import { cn } from "../lib/utils";
 import { storageService } from "../services/storageService";
+import { toast } from "../components/ui/use-toast";
 import type { PrintJob } from "../types";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -259,6 +260,9 @@ const PDFJobManager: React.FC = () => {
       a.download = `${file?.name.replace(".pdf", "") || "print"}-ready.pdf`;
       a.click();
       URL.revokeObjectURL(url);
+      toast({ title: "PDF exported", variant: "success" });
+    } catch {
+      toast({ title: "Failed to export PDF", variant: "destructive" });
     } finally {
       setExporting(false);
     }
@@ -291,6 +295,9 @@ const PDFJobManager: React.FC = () => {
           URL.revokeObjectURL(url);
         }
       }
+      toast({ title: "Images exported", variant: "success" });
+    } catch {
+      toast({ title: "Failed to export images", variant: "destructive" });
     } finally {
       setExporting(false);
     }
@@ -298,10 +305,14 @@ const PDFJobManager: React.FC = () => {
 
   const printDirectly = async () => {
     if (!pdfBytes || pages.length === 0) return;
-    const output = await buildPdfFromPages();
-    const blob = new Blob([output], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
+    try {
+      const output = await buildPdfFromPages();
+      const blob = new Blob([output], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch {
+      toast({ title: "Failed to open print preview", variant: "destructive" });
+    }
   };
 
   const addToNewJob = async () => {
@@ -333,6 +344,9 @@ const PDFJobManager: React.FC = () => {
       setAddJobName("");
       setAddJobPhone("");
       setAddJobNotes("");
+      toast({ title: "Print job created", variant: "success" });
+    } catch (err: any) {
+      toast({ title: "Failed to create job", description: err.message, variant: "destructive" });
     } finally {
       setAddJobUploading(false);
     }
@@ -351,6 +365,9 @@ const PDFJobManager: React.FC = () => {
         copies,
         paperType: "normal",
       });
+      toast({ title: "Job saved", variant: "success" });
+    } catch (err: any) {
+      toast({ title: "Failed to save job", description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
