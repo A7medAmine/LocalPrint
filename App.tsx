@@ -242,7 +242,13 @@ const App: React.FC = () => {
               path="/admin/studio"
               element={
                 <ProtectedRoute isAdmin={isAdmin}>
-                  <PrintStudio />
+                  <PrintStudio
+                    darkMode={darkMode}
+                    onToggleDarkMode={() => setDarkMode((p) => !p)}
+                    lang={lang}
+                    onToggleLang={setLang}
+                    currentSettings={settings}
+                  />
                 </ProtectedRoute>
               }
             />

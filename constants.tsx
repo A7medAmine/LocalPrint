@@ -155,6 +155,8 @@ export const TRANSLATIONS: Translations = {
   bulkPrint: { en: "Print All", ar: "طباعة الكل" },
   bulkDownload: { en: "Download All", ar: "تحميل الكل" },
   markAsPrinted: { en: "Mark Printed", ar: "تحديد مطبوع" },
+  darkMode: { en: "Dark Mode", ar: "الوضع الليلي" },
+  lightMode: { en: "Light Mode", ar: "الوضع النهاري" },
 };
 
 export const ALLOWED_TYPES = [
