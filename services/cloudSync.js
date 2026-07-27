@@ -25,6 +25,11 @@ const baseHeaders = {
 let syncTimer = null;
 let isSyncing = false;
 
+let newJobCallback = null;
+export function setNewJobCallback(fn) {
+  newJobCallback = fn;
+}
+
 function log(level, msg, data) {
   const ts = new Date().toISOString();
   const prefix = `[☁️ CloudSync ${ts}]`;
@@ -38,7 +43,7 @@ function log(level, msg, data) {
   }
 }
 
-function isEnabled() {
+export function isEnabled() {
   const cfg = getConfig();
   if (!cfg.url || !cfg.token) {
     return false;
@@ -211,6 +216,16 @@ async function importOrder(order) {
 
     log('info', `Imported order ${orderId} into local jobs`);
 
+    if (newJobCallback) {
+      try {
+        newJobCallback({
+          id: orderId,
+          customerName: order.customerName || '',
+          fileName: order.fileName || 'unknown.pdf',
+        });
+      } catch (_) {}
+    }
+
     const acked = await acknowledgeOrder(orderId);
     if (!acked) {
       log('warn', `Order ${orderId} imported but ack failed — will retry`);
@@ -227,7 +242,9 @@ async function pollPending() {
   if (!isEnabled()) return;
   const cfg = getConfig();
 
-  const res = await fetchWithRetry(`${cfg.url}/api/shop/pending`);
+  const res = await fetchWithRetry(`${cfg.url}/api/shop/pending`, {
+    headers: { Authorization: `Bearer ${cfg.token}` },
+  });
   if (!res || !res.ok) {
     log('error', 'Failed to fetch pending orders', { status: res?.status });
     return;

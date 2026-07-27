@@ -128,7 +128,7 @@ app.use(express.urlencoded({ extended: true }));
 // CORS for development (allow frontend on different port)
 if (isDev) {
   app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "http://localhost:5000");
+    res.header("Access-Control-Allow-Origin", "http://localhost:3000");
     res.header(
       "Access-Control-Allow-Methods",
       "GET, POST, PUT, DELETE, OPTIONS",
@@ -691,6 +691,13 @@ app.get("/api/logo", (req, res) => {
 });
 
 // Get settings
+// Push the latest settings/paper types/discount rules to the cloud (fire-and-forget)
+function triggerCloudSettingsSync() {
+  import('./services/cloudSync.js').then(({ syncSettings, isEnabled }) => {
+    if (isEnabled()) syncSettings().catch(() => {});
+  }).catch(() => {});
+}
+
 app.get("/api/settings", (req, res) => {
   const settings = getSettings();
   settings.paperTypes = getPaperTypes();
@@ -1034,6 +1041,7 @@ app.post("/api/discount-rules", requireAdmin, (req, res) => {
     });
 
     res.status(201).json(rule);
+    triggerCloudSettingsSync();
   } catch (err) {
     console.error("❌ Error creating discount rule:", err);
     res.status(500).json({ error: "Failed to create discount rule" });
@@ -1066,6 +1074,7 @@ app.put("/api/discount-rules/:id", requireAdmin, (req, res) => {
     }
 
     res.status(200).json(rule);
+    triggerCloudSettingsSync();
   } catch (err) {
     console.error("❌ Error updating discount rule:", err);
     res.status(500).json({ error: "Failed to update discount rule" });
@@ -1078,6 +1087,7 @@ app.delete("/api/discount-rules/:id", requireAdmin, (req, res) => {
     const ruleId = req.params.id;
     deleteDiscountRule(ruleId);
     res.status(200).json({ success: true, id: ruleId });
+    triggerCloudSettingsSync();
   } catch (err) {
     console.error("❌ Error deleting discount rule:", err);
     res.status(500).json({ error: "Failed to delete discount rule" });
@@ -1107,6 +1117,7 @@ app.post("/api/paper-types", requireAdmin, (req, res) => {
     }
     const pt = createPaperType({ id, name, nameAr: nameAr || '', colorPerPage: parseFloat(colorPerPage) || 0, blackWhitePerPage: parseFloat(blackWhitePerPage) || 0 });
     res.status(201).json(pt);
+    triggerCloudSettingsSync();
   } catch (err) {
     console.error("❌ Error creating paper type:", err);
     res.status(500).json({ error: "Failed to create paper type" });
@@ -1119,6 +1130,7 @@ app.put("/api/paper-types/:id", requireAdmin, (req, res) => {
     const pt = updatePaperType(req.params.id, req.body);
     if (!pt) return res.status(404).json({ error: "Paper type not found" });
     res.status(200).json(pt);
+    triggerCloudSettingsSync();
   } catch (err) {
     console.error("❌ Error updating paper type:", err);
     res.status(500).json({ error: "Failed to update paper type" });
@@ -1130,6 +1142,7 @@ app.delete("/api/paper-types/:id", requireAdmin, (req, res) => {
   try {
     deletePaperType(req.params.id);
     res.status(200).json({ success: true });
+    triggerCloudSettingsSync();
   } catch (err) {
     console.error("❌ Error deleting paper type:", err);
     res.status(500).json({ error: "Failed to delete paper type" });
@@ -1484,7 +1497,7 @@ app.listen(PORT, HOST, () => {
   console.log(`🌐 Server URL: http://${HOST}:${PORT}`);
 
   if (isDev) {
-    console.log(`🔧 Development mode - CORS enabled for http://localhost:5173`);
+    console.log(`🔧 Development mode - CORS enabled for http://localhost:3000`);
     console.log(`💡 Frontend should run on port 5173 (Vite default)`);
   } else {
     console.log(`📁 Serving static files from: ${DIST_DIR}`);
@@ -1511,8 +1524,11 @@ app.listen(PORT, HOST, () => {
     startPolling(30_000);
   }
 
-  // Start cloud sync (background)
-  import('./services/cloudSync.js').then(({ startCloudSync }) => {
+  // Start cloud sync (background) — broadcasts newly-imported orders to SSE clients
+  import('./services/cloudSync.js').then(({ startCloudSync, setNewJobCallback }) => {
+    setNewJobCallback((job) => {
+      broadcastEvent("cloud-job-imported", job);
+    });
     startCloudSync().catch(err => {
       console.error('❌ Cloud sync startup error:', err.message);
     });

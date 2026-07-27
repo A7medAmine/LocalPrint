@@ -490,6 +490,15 @@ const AdminView: React.FC<AdminViewProps> = ({
       loadGmailPending();
     });
     es.addEventListener("new-job", () => { loadJobs(); });
+    es.addEventListener("cloud-job-imported", (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        const label = data.customerName ? `${data.customerName} — ${data.fileName}` : data.fileName;
+        toast({ title: isRtl ? `طلب جديد من الرفع الإلكتروني: ${label}` : `New online upload: ${label}`, variant: "success" });
+        new Audio('/notification.mp3').play().catch(() => {});
+      } catch {}
+      loadJobs();
+    });
     es.addEventListener("job-deleted", () => { loadJobs(); });
     es.onerror = () => {};
     return () => { es.close(); };
@@ -507,6 +516,9 @@ const AdminView: React.FC<AdminViewProps> = ({
     if (currentSettings.address) setAddress(currentSettings.address);
     if (currentSettings.workingHours) setWorkingHours(currentSettings.workingHours);
     if (currentSettings.returnPolicy) setReturnPolicy(currentSettings.returnPolicy);
+    if (currentSettings.cloudSyncUrl) setCloudSyncUrl(currentSettings.cloudSyncUrl);
+    if (currentSettings.shopApiToken) setShopApiToken(currentSettings.shopApiToken);
+    if (currentSettings.cloudSyncPollInterval) setCloudSyncPollInterval(currentSettings.cloudSyncPollInterval);
   }, [currentSettings]);
 
   const loadJobs = async () => {

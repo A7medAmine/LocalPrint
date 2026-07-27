@@ -229,6 +229,9 @@ class StorageService {
         address: settings?.address || undefined,
         workingHours: settings?.workingHours || undefined,
         returnPolicy: settings?.returnPolicy || undefined,
+        cloudSyncUrl: settings?.cloudSyncUrl || undefined,
+        shopApiToken: settings?.shopApiToken || undefined,
+        cloudSyncPollInterval: settings?.cloudSyncPollInterval || undefined,
       };
     } catch (e) {
       return { shopName: "PrintShop Hub", logoUrl: null, phoneNumbers: [], email: "", address: "", workingHours: "", returnPolicy: "" };
