@@ -57,6 +57,9 @@ export interface ShopSettings {
   address?: string;
   workingHours?: string;
   returnPolicy?: string;
+  cloudSyncUrl?: string;
+  shopApiToken?: string;
+  cloudSyncPollInterval?: string;
 }
 
 export type Language = "en" | "ar";

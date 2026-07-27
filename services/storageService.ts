@@ -178,6 +178,9 @@ class StorageService {
     address?: string;
     workingHours?: string;
     returnPolicy?: string;
+    cloudSyncUrl?: string;
+    shopApiToken?: string;
+    cloudSyncPollInterval?: string;
   }): Promise<void> {
     await this.safeFetch("/api/settings", {
       method: "POST",

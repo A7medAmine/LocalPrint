@@ -102,6 +102,16 @@ try { db.exec(`ALTER TABLE gmail_pending ADD COLUMN discarded_at TEXT`); } catch
 try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentStatus TEXT DEFAULT 'UNPAID'`); } catch (e) {}
 try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentAmount REAL`); } catch (e) {}
 try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentDate TEXT`); } catch (e) {}
+try { db.exec(`ALTER TABLE jobs ADD COLUMN cloudOrderId TEXT`); } catch (e) {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cloud_imports (
+    cloudOrderId TEXT PRIMARY KEY,
+    localJobId TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'imported',
+    importedAt TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+`);
 
 // Seed default paper types if table is empty
 const paperTypeCount = db.prepare('SELECT COUNT(*) AS count FROM paper_types').get();

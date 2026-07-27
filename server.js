@@ -746,10 +746,25 @@ app.post("/api/settings", requireAdmin, (req, res) => {
     if (req.body.returnPolicy !== undefined) {
       updateSetting('returnPolicy', req.body.returnPolicy);
     }
+    if (req.body.cloudSyncUrl !== undefined) {
+      updateSetting('cloudSyncUrl', req.body.cloudSyncUrl);
+    }
+    if (req.body.shopApiToken !== undefined) {
+      updateSetting('shopApiToken', req.body.shopApiToken);
+    }
+    if (req.body.cloudSyncPollInterval !== undefined) {
+      updateSetting('cloudSyncPollInterval', req.body.cloudSyncPollInterval);
+    }
 
     const settings = getSettings();
     settings.paperTypes = getPaperTypes();
     res.status(200).json({ success: true, settings });
+
+    // Restart cloud sync if config changed
+    import('./services/cloudSync.js').then(({ stopCloudSync, startCloudSync }) => {
+      stopCloudSync();
+      startCloudSync().catch(() => {});
+    }).catch(() => {});
   } catch (err) {
     console.error("❌ Settings update error:", err);
     res
@@ -1495,6 +1510,13 @@ app.listen(PORT, HOST, () => {
     console.log('📬 Gmail account connected, starting auto-poll every 30s...');
     startPolling(30_000);
   }
+
+  // Start cloud sync (background)
+  import('./services/cloudSync.js').then(({ startCloudSync }) => {
+    startCloudSync().catch(err => {
+      console.error('❌ Cloud sync startup error:', err.message);
+    });
+  });
 });
 
 // Graceful shutdown

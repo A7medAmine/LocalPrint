@@ -130,6 +130,9 @@ const AdminView: React.FC<AdminViewProps> = ({
     [jobId: string]: number;
   }>({});
   const [discountRules, setDiscountRules] = useState<DiscountRule[]>([]);
+  const [cloudSyncUrl, setCloudSyncUrl] = useState(currentSettings.cloudSyncUrl || "");
+  const [shopApiToken, setShopApiToken] = useState(currentSettings.shopApiToken || "");
+  const [cloudSyncPollInterval, setCloudSyncPollInterval] = useState(currentSettings.cloudSyncPollInterval || "30000");
 
   // Gmail integration state
   const [gmailConnected, setGmailConnected] = useState(false);
@@ -1091,8 +1094,8 @@ const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const saveSettings = async () => {
-    await storageService.saveSettings({ shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy });
-    onSettingsUpdate({ ...currentSettings, shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy });
+    await storageService.saveSettings({ shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval });
+    onSettingsUpdate({ ...currentSettings, shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval });
     toast({ title: isRtl ? "تم الحفظ بنجاح" : "Settings saved successfully", variant: "success" });
   };
 
@@ -2692,6 +2695,46 @@ const AdminView: React.FC<AdminViewProps> = ({
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Cloud Sync Card */}
+            <Card className="lg:col-span-2 border-0">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{isRtl ? "المزامنة السحابية" : "Cloud Sync"}</CardTitle>
+                    <CardDescription>{isRtl ? "المزامنة مع تطبيق السحابة للطلبات والإعدادات" : "Sync orders and settings with a cloud instance"}</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    {isRtl ? "رابط السحابة" : "Cloud URL"}
+                  </label>
+                  <Input value={cloudSyncUrl} onChange={(e) => setCloudSyncUrl(e.target.value)} placeholder="https://your-cloud-app.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    {isRtl ? "رمز API" : "API Token"}
+                  </label>
+                  <Input type="password" value={shopApiToken} onChange={(e) => setShopApiToken(e.target.value)} placeholder={isRtl ? "64 حرفًا سداسيًا" : "64-char hex token"} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    {isRtl ? "فترة التحديث (مللي ثانية)" : "Poll Interval (ms)"}
+                  </label>
+                  <Input type="number" min="15000" step="1000" value={cloudSyncPollInterval} onChange={(e) => setCloudSyncPollInterval(e.target.value)} />
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    {isRtl ? "الحد الأدنى 15000 (15 ثانية)" : "Minimum 15000 (15 seconds)"}
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
