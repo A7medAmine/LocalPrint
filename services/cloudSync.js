@@ -90,6 +90,7 @@ export async function syncSettings() {
     address: settings.address || '',
     workingHours: settings.workingHours || '',
     returnPolicy: settings.returnPolicy || '',
+    autoAcceptCloudJobs: settings.autoAcceptCloudJobs !== false,
   };
 
   const payload = {
@@ -153,7 +154,7 @@ async function downloadFile(orderId, serverFileName) {
   return { localFilename, filePath, buffer };
 }
 
-async function acknowledgeOrder(orderId) {
+export async function acknowledgeOrder(orderId) {
   const cfg = getConfig();
   const res = await fetchWithRetry(`${cfg.url}/api/shop/ack`, {
     method: 'POST',
@@ -169,11 +170,32 @@ async function acknowledgeOrder(orderId) {
   return false;
 }
 
+export async function rejectCloudOrder(orderId, reason, note) {
+  const cfg = getConfig();
+  const res = await fetchWithRetry(`${cfg.url}/api/shop/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ orderId, reason, note }),
+    headers: { Authorization: `Bearer ${cfg.token}` },
+  });
+
+  if (res && res.ok) {
+    log('info', `Rejected cloud order ${orderId}`, { reason });
+    return true;
+  }
+  log('error', `Failed to reject cloud order ${orderId}`, { status: res?.status });
+  return false;
+}
+
 async function importOrder(order) {
   const orderId = order.id;
 
-  const existing = db.prepare('SELECT id FROM jobs WHERE id = ?').get(orderId);
+  const existing = db.prepare('SELECT id, status FROM jobs WHERE id = ? OR cloudOrderId = ?').get(orderId, orderId);
   if (existing) {
+    if (existing.status === 'pending_review') {
+      // Awaiting the shop's accept/reject decision — must stay un-acked on the
+      // cloud (that's the whole point of the review step), so do nothing.
+      return false;
+    }
     log('warn', `Order ${orderId} already exists locally, skipping`);
     await acknowledgeOrder(orderId);
     return false;
@@ -189,14 +211,18 @@ async function importOrder(order) {
   const copies = (typeof order.copies === 'number' && order.copies >= 1) ? order.copies : 1;
   const paperType = order.paperType || 'normal';
 
+  const settings = getSettings();
+  const autoAccept = settings.autoAcceptCloudJobs !== false;
+
   try {
     db.prepare(`
       INSERT INTO jobs (
-        id, customerName, phoneNumber, notes, fileName, fileType,
+        id, cloudOrderId, customerName, phoneNumber, notes, fileName, fileType,
         fileSize, uploadDate, status, serverFileName, pageCount,
         colorMode, copies, paperType, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
+      orderId,
       orderId,
       order.customerName || '',
       order.phoneNumber || '',
@@ -205,7 +231,7 @@ async function importOrder(order) {
       order.fileType || 'application/pdf',
       order.fileSize || dl.buffer.length,
       order.uploadDate || new Date().toISOString(),
-      'PENDING',
+      autoAccept ? 'PENDING' : 'pending_review',
       dl.localFilename,
       pageCount,
       colorMode,
@@ -214,7 +240,7 @@ async function importOrder(order) {
       'cloud-sync',
     );
 
-    log('info', `Imported order ${orderId} into local jobs`);
+    log('info', `Imported order ${orderId} into local jobs`, { autoAccept });
 
     if (newJobCallback) {
       try {
@@ -222,13 +248,18 @@ async function importOrder(order) {
           id: orderId,
           customerName: order.customerName || '',
           fileName: order.fileName || 'unknown.pdf',
+          pendingReview: !autoAccept,
         });
       } catch (_) {}
     }
 
-    const acked = await acknowledgeOrder(orderId);
-    if (!acked) {
-      log('warn', `Order ${orderId} imported but ack failed — will retry`);
+    if (autoAccept) {
+      const acked = await acknowledgeOrder(orderId);
+      if (!acked) {
+        log('warn', `Order ${orderId} imported but ack failed — will retry`);
+      }
+    } else {
+      log('info', `Order ${orderId} awaiting shop review — not acknowledged yet`);
     }
     return true;
   } catch (err) {

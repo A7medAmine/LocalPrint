@@ -156,7 +156,11 @@ export const getSettings = () => {
 };
 
 export const updateSetting = (key, value) => {
-  const serializedValue = typeof value === 'object' ? JSON.stringify(value) : value;
+  // better-sqlite3 only binds numbers/strings/bigints/buffers/null — booleans
+  // (and objects) must be serialized first.
+  const serializedValue = (typeof value === 'object' || typeof value === 'boolean')
+    ? JSON.stringify(value)
+    : value;
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, serializedValue);
 };
 

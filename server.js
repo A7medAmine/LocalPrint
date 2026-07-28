@@ -460,12 +460,21 @@ app.post("/api/jobs/:id/file", requireAdmin, upload.single("file"), async (req, 
 app.put("/api/jobs/:id/status", requireAdmin, (req, res) => {
   const { status } = req.body;
   const jobId = req.params.id;
-  
+
   const result = db.prepare('UPDATE jobs SET status = ? WHERE id = ?').run(status, jobId);
 
   if (result.changes > 0) {
     const updatedJob = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
     res.status(200).json({ success: true, job: updatedJob });
+
+    // Push to the cloud so the customer's upload page reflects the change
+    // via the SSE stream. Fire-and-forget — no need to block the response.
+    const cloudOrderId = updatedJob?.cloudOrderId;
+    if (cloudOrderId) {
+      import('./services/cloudSync.js').then(({ updateCloudStatus, isEnabled }) => {
+        if (isEnabled()) updateCloudStatus(cloudOrderId, status).catch(() => {});
+      }).catch(() => {});
+    }
   } else {
     res.status(404).json({ success: false, error: "Job not found" });
   }
@@ -545,6 +554,65 @@ app.delete("/api/jobs/:id", (req, res) => {
   }
 });
 
+// Accept a job awaiting review (cloud-sync jobs held back by auto_accept_cloud_jobs=false)
+app.post("/api/jobs/:id/review/accept", requireAdmin, async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
+    if (!job) return res.status(404).json({ success: false, error: "Job not found" });
+    if (job.status !== 'pending_review') {
+      return res.status(400).json({ success: false, error: "Job is not awaiting review" });
+    }
+
+    db.prepare('UPDATE jobs SET status = ? WHERE id = ?').run('PENDING', jobId);
+
+    // Ack on the cloud so it stops showing up in /api/shop/pending. If this
+    // fails, the next poll cycle's dedupe check will notice the job is no
+    // longer pending_review and retry the ack automatically.
+    import('./services/cloudSync.js').then(({ acknowledgeOrder }) => {
+      acknowledgeOrder(jobId).catch(err => console.error('❌ Failed to ack accepted review job:', err.message));
+    }).catch(() => {});
+
+    const updatedJob = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
+    broadcastEvent("new-job", { id: jobId });
+    res.status(200).json({ success: true, job: updatedJob });
+  } catch (err) {
+    console.error("❌ Accept review error:", err);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+// Reject a job awaiting review — tells the cloud why, deletes the local file/row
+app.post("/api/jobs/:id/review/reject", requireAdmin, async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    const { reason, note } = req.body;
+    if (!reason) {
+      return res.status(400).json({ success: false, error: "reason is required" });
+    }
+
+    const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
+    if (!job) return res.status(404).json({ success: false, error: "Job not found" });
+
+    const { rejectCloudOrder } = await import('./services/cloudSync.js');
+    const rejected = await rejectCloudOrder(jobId, reason, note);
+    if (!rejected) {
+      console.warn(`⚠️  Cloud reject failed for ${jobId} — it may reappear for review on the next poll`);
+    }
+
+    if (job.serverFileName) {
+      const filePath = path.join(UPLOADS_DIR, job.serverFileName);
+      try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) { console.warn("⚠️  Could not delete rejected job's file"); }
+    }
+
+    db.prepare('DELETE FROM jobs WHERE id = ?').run(jobId);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("❌ Reject review error:", err);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
 // Bulk delete jobs
 app.post("/api/jobs/bulk/delete", requireAdmin, (req, res) => {
   const { ids } = req.body;
@@ -574,11 +642,25 @@ app.post("/api/jobs/bulk/status", requireAdmin, (req, res) => {
     return res.status(400).json({ success: false, error: "No IDs provided" });
   }
   const stmt = db.prepare('UPDATE jobs SET status = ? WHERE id = ?');
+  const getStmt = db.prepare('SELECT cloudOrderId FROM jobs WHERE id = ?');
+  const cloudIds = [];
   const txn = db.transaction((jobIds) => {
-    for (const id of jobIds) stmt.run(status, id);
+    for (const id of jobIds) {
+      stmt.run(status, id);
+      const row = getStmt.get(id);
+      if (row?.cloudOrderId) cloudIds.push(row.cloudOrderId);
+    }
   });
   txn(ids);
   res.status(200).json({ success: true, updated: ids.length });
+
+  // Fire-and-forget cloud sync for each cloud-sourced job
+  if (cloudIds.length > 0) {
+    import('./services/cloudSync.js').then(({ updateCloudStatus, isEnabled }) => {
+      if (!isEnabled()) return;
+      for (const cid of cloudIds) updateCloudStatus(cid, status).catch(() => {});
+    }).catch(() => {});
+  }
 });
 
 // Update payment status for a single job
@@ -761,6 +843,9 @@ app.post("/api/settings", requireAdmin, (req, res) => {
     }
     if (req.body.cloudSyncPollInterval !== undefined) {
       updateSetting('cloudSyncPollInterval', req.body.cloudSyncPollInterval);
+    }
+    if (req.body.autoAcceptCloudJobs !== undefined) {
+      updateSetting('autoAcceptCloudJobs', !!req.body.autoAcceptCloudJobs);
     }
 
     const settings = getSettings();

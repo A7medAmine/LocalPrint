@@ -60,6 +60,7 @@ export interface ShopSettings {
   cloudSyncUrl?: string;
   shopApiToken?: string;
   cloudSyncPollInterval?: string;
+  autoAcceptCloudJobs?: boolean;
 }
 
 export type Language = "en" | "ar";

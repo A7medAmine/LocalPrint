@@ -181,6 +181,7 @@ class StorageService {
     cloudSyncUrl?: string;
     shopApiToken?: string;
     cloudSyncPollInterval?: string;
+    autoAcceptCloudJobs?: boolean;
   }): Promise<void> {
     await this.safeFetch("/api/settings", {
       method: "POST",
@@ -197,6 +198,21 @@ class StorageService {
       body: JSON.stringify({ myIds: myJobs }),
     });
     localStorage.setItem("my_upload_ids", JSON.stringify(myJobs.filter((mid) => mid !== id)));
+  }
+
+  async acceptReviewJob(id: string): Promise<PrintJob> {
+    const data = await this.safeFetch(`/api/jobs/${id}/review/accept`, {
+      method: "POST",
+    });
+    return data.job;
+  }
+
+  async rejectReviewJob(id: string, reason: string, note?: string): Promise<void> {
+    await this.safeFetch(`/api/jobs/${id}/review/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason, note }),
+    });
   }
 
   async getSettings(): Promise<ShopSettings> {
@@ -232,6 +248,7 @@ class StorageService {
         cloudSyncUrl: settings?.cloudSyncUrl || undefined,
         shopApiToken: settings?.shopApiToken || undefined,
         cloudSyncPollInterval: settings?.cloudSyncPollInterval || undefined,
+        autoAcceptCloudJobs: settings?.autoAcceptCloudJobs !== false,
       };
     } catch (e) {
       return { shopName: "PrintShop Hub", logoUrl: null, phoneNumbers: [], email: "", address: "", workingHours: "", returnPolicy: "" };
