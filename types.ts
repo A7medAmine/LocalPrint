@@ -61,6 +61,34 @@ export interface ShopSettings {
   shopApiToken?: string;
   cloudSyncPollInterval?: string;
   autoAcceptCloudJobs?: boolean;
+  autoDeductStock?: boolean;
+}
+
+export type InventoryCategory = "paper" | "ink_toner" | "custom";
+export type InventoryReason = "manual" | "restock" | "auto_deduct";
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category: InventoryCategory;
+  unit: string;
+  currentStock: number;
+  lowStockThreshold: number;
+  /** Only meaningful for category "paper" — enables auto-deduct on printed jobs. */
+  paperTypeId: string | null;
+  sortOrder: number;
+  createdAt?: string;
+}
+
+export interface InventoryAdjustment {
+  id: number;
+  itemId: string;
+  amount: number;
+  reason: InventoryReason;
+  note: string;
+  jobId: string | null;
+  stockAfter: number;
+  createdAt: string;
 }
 
 export type Language = "en" | "ar";

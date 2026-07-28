@@ -57,6 +57,18 @@
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-ring: 239 84% 67%;
   }
+
+  /* Default every border to the theme token so bare `border` utilities
+     don't fall back to Tailwind's light gray (which reads as a white
+     border in dark mode). */
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
 }
 
 @layer utilities {

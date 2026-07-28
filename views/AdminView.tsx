@@ -48,6 +48,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import PreviewModal from "../components/preview/PreviewModal";
 import LanguageToggle from "../components/LanguageToggle";
+import InventorySection from "../components/InventorySection";
 
 interface AdminViewProps {
   lang: Language;
@@ -95,7 +96,8 @@ const AdminView: React.FC<AdminViewProps> = ({
 
   const [groups, setGroups] = useState<CustomerGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"jobs" | "settings" | "gmail" | "review">("jobs");
+  const [activeTab, setActiveTab] = useState<"jobs" | "settings" | "gmail" | "review" | "inventory">("jobs");
+  const [lowStockCount, setLowStockCount] = useState(0);
   const [reviewJobs, setReviewJobs] = useState<PrintJob[]>([]);
   const [rejectDialogJob, setRejectDialogJob] = useState<PrintJob | null>(null);
   const [rejectReason, setRejectReason] = useState("bad_file");
@@ -142,6 +144,7 @@ const AdminView: React.FC<AdminViewProps> = ({
   const [shopApiToken, setShopApiToken] = useState(currentSettings.shopApiToken || "");
   const [cloudSyncPollInterval, setCloudSyncPollInterval] = useState(currentSettings.cloudSyncPollInterval || "30000");
   const [autoAcceptCloudJobs, setAutoAcceptCloudJobs] = useState(currentSettings.autoAcceptCloudJobs !== false);
+  const [autoDeductStock, setAutoDeductStock] = useState(currentSettings.autoDeductStock === true);
 
   // Gmail integration state
   const [gmailConnected, setGmailConnected] = useState(false);
@@ -507,11 +510,22 @@ const AdminView: React.FC<AdminViewProps> = ({
   });
   const [deleteRuleConfirm, setDeleteRuleConfirm] = useState<string | null>(null);
 
+  // The sidebar badge must be accurate before the Inventory tab is ever opened.
+  const loadLowStockCount = async () => {
+    try {
+      const { lowStockCount: count } = await storageService.getInventory();
+      setLowStockCount(count);
+    } catch (err) {
+      console.error("Failed to load low stock count:", err);
+    }
+  };
+
   useEffect(() => {
     loadJobs();
     loadDiscountRules();
     loadGmailStatus();
     loadGmailPending();
+    loadLowStockCount();
 
     // SSE listener — real-time updates
     const es = new EventSource('/api/events');
@@ -557,6 +571,7 @@ const AdminView: React.FC<AdminViewProps> = ({
     if (currentSettings.shopApiToken) setShopApiToken(currentSettings.shopApiToken);
     if (currentSettings.cloudSyncPollInterval) setCloudSyncPollInterval(currentSettings.cloudSyncPollInterval);
     setAutoAcceptCloudJobs(currentSettings.autoAcceptCloudJobs !== false);
+    setAutoDeductStock(currentSettings.autoDeductStock === true);
   }, [currentSettings]);
 
   const loadJobs = async () => {
@@ -895,6 +910,7 @@ const AdminView: React.FC<AdminViewProps> = ({
       await storageService.bulkUpdateStatus(ids, status);
       setSelectedJobIds(new Set());
       loadJobs();
+      if (status === PrintStatus.PRINTED) loadLowStockCount();
       toast({ title: isRtl ? `تم تحديث ${ids.length} ملفات` : `${ids.length} files updated`, variant: "success" });
     } catch (err) {
       toast({ title: isRtl ? "فشل التحديث" : "Update failed", variant: "destructive" });
@@ -939,6 +955,8 @@ const AdminView: React.FC<AdminViewProps> = ({
   const handleStatusChange = async (jobId: string, newStatus: PrintStatus) => {
     await storageService.updateStatus(jobId, newStatus);
     loadJobs();
+    // Marking a job printed can auto-deduct paper, so the badge may have moved.
+    if (newStatus === PrintStatus.PRINTED) loadLowStockCount();
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -1146,8 +1164,8 @@ const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const saveSettings = async () => {
-    await storageService.saveSettings({ shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval, autoAcceptCloudJobs });
-    onSettingsUpdate({ ...currentSettings, shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval, autoAcceptCloudJobs });
+    await storageService.saveSettings({ shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval, autoAcceptCloudJobs, autoDeductStock });
+    onSettingsUpdate({ ...currentSettings, shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval, autoAcceptCloudJobs, autoDeductStock });
     toast({ title: isRtl ? "تم الحفظ بنجاح" : "Settings saved successfully", variant: "success" });
   };
 
@@ -1193,11 +1211,12 @@ const AdminView: React.FC<AdminViewProps> = ({
   const navItems = [
     { id: "dashboard", label: isRtl ? "لوحة المعلومات" : "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
     { id: "review", label: isRtl ? "مراجعة الطلبات" : "Job Review", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", badge: reviewJobs.length },
+    { id: "inventory", label: isRtl ? "المخزون" : "Inventory", icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4", badge: lowStockCount },
     { id: "settings", label: t("settings"), icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" },
     { id: "gmail", label: isRtl ? "البريد الإلكتروني" : "Email", icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" },
   ];
 
-  const activeNav = activeTab === "gmail" ? "gmail" : activeTab === "settings" ? "settings" : activeTab === "review" ? "review" : "dashboard";
+  const activeNav = activeTab === "gmail" ? "gmail" : activeTab === "settings" ? "settings" : activeTab === "review" ? "review" : activeTab === "inventory" ? "inventory" : "dashboard";
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F8FAFC] dark:bg-gray-950">
@@ -2435,6 +2454,12 @@ const AdminView: React.FC<AdminViewProps> = ({
               </DialogContent>
             </Dialog>
           </div>
+        ) : activeTab === "inventory" ? (
+          <InventorySection
+            lang={lang}
+            paperTypes={paperTypes}
+            onLowStockCountChange={setLowStockCount}
+          />
         ) : (
           <div className="max-w-5xl mx-auto">
             {/* Page Header */}
@@ -2889,6 +2914,49 @@ const AdminView: React.FC<AdminViewProps> = ({
                   <Switch
                     checked={autoAcceptCloudJobs}
                     onCheckedChange={(checked) => setAutoAcceptCloudJobs(checked)}
+                    className="shrink-0"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Inventory Card */}
+            <Card className="lg:col-span-2 border-0">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{isRtl ? "المخزون" : "Inventory"}</CardTitle>
+                    <CardDescription>{isRtl ? "خصم الورق تلقائيًا عند الطباعة" : "Automatic paper deduction on printing"}</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+                      {isRtl ? "خصم المخزون تلقائيًا" : "Auto-deduct stock"}
+                    </label>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 max-w-xl">
+                      {isRtl
+                        ? "عند التفعيل، وبمجرد تحديد أي طلب كـ\"تمت الطباعة\"، يتم خصم (عدد الصفحات × عدد النسخ) تلقائيًا من عنصر المخزون المرتبط بنوع الورق المستخدم. إذا لم يكن هناك عنصر مرتبط بذلك النوع، فلن يحدث أي شيء. الحبر والمستلزمات الأخرى تُعدَّل يدويًا دائمًا."
+                        : "When on, marking any job as printed subtracts pages × copies from the inventory item linked to that job's paper type. If no item is linked to that paper type, nothing happens. Ink/toner and other supplies are always adjusted manually."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("inventory")}
+                      className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline mt-2"
+                    >
+                      {isRtl ? "إدارة عناصر المخزون ←" : "Manage inventory items →"}
+                    </button>
+                  </div>
+                  <Switch
+                    checked={autoDeductStock}
+                    onCheckedChange={(checked) => setAutoDeductStock(checked)}
                     className="shrink-0"
                   />
                 </div>

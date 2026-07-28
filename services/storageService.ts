@@ -1,4 +1,4 @@
-import { PrintJob, PrintStatus, ShopSettings, DiscountRule } from "../types";
+import { PrintJob, PrintStatus, ShopSettings, DiscountRule, InventoryItem, InventoryAdjustment } from "../types";
 
 class StorageService {
   private authToken: string | null = null;
@@ -182,6 +182,7 @@ class StorageService {
     shopApiToken?: string;
     cloudSyncPollInterval?: string;
     autoAcceptCloudJobs?: boolean;
+    autoDeductStock?: boolean;
   }): Promise<void> {
     await this.safeFetch("/api/settings", {
       method: "POST",
@@ -249,6 +250,7 @@ class StorageService {
         shopApiToken: settings?.shopApiToken || undefined,
         cloudSyncPollInterval: settings?.cloudSyncPollInterval || undefined,
         autoAcceptCloudJobs: settings?.autoAcceptCloudJobs !== false,
+        autoDeductStock: settings?.autoDeductStock === true,
       };
     } catch (e) {
       return { shopName: "PrintShop Hub", logoUrl: null, phoneNumbers: [], email: "", address: "", workingHours: "", returnPolicy: "" };
@@ -289,6 +291,53 @@ class StorageService {
 
   async deletePaperType(id: string): Promise<void> {
     await this.safeFetch(`/api/paper-types/${id}`, { method: "DELETE" });
+  }
+
+  // Inventory
+  async getInventory(): Promise<{ items: InventoryItem[]; lowStockCount: number }> {
+    const data = await this.safeFetch("/api/inventory");
+    return { items: Array.isArray(data?.items) ? data.items : [], lowStockCount: data?.lowStockCount || 0 };
+  }
+
+  async getInventoryAdjustments(itemId?: string, limit = 50): Promise<InventoryAdjustment[]> {
+    const params = new URLSearchParams();
+    if (itemId) params.set("itemId", itemId);
+    params.set("limit", String(limit));
+    const data = await this.safeFetch(`/api/inventory/adjustments?${params}`);
+    return Array.isArray(data) ? data : [];
+  }
+
+  async createInventoryItem(item: Partial<InventoryItem>): Promise<InventoryItem> {
+    return this.safeFetch("/api/inventory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    });
+  }
+
+  async updateInventoryItem(id: string, updates: Partial<InventoryItem>): Promise<InventoryItem> {
+    return this.safeFetch(`/api/inventory/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteInventoryItem(id: string): Promise<void> {
+    await this.safeFetch(`/api/inventory/${id}`, { method: "DELETE" });
+  }
+
+  async adjustInventoryStock(
+    id: string,
+    amount: number,
+    reason: "manual" | "restock",
+    note?: string,
+  ): Promise<{ item: InventoryItem; adjustment: InventoryAdjustment }> {
+    return this.safeFetch(`/api/inventory/${id}/adjust`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount, reason, note }),
+    });
   }
 
   // Discount Rules
