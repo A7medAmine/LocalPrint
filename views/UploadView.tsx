@@ -8,7 +8,7 @@ import {
   formatPrice,
   calculateJobDiscount,
 } from "../utils/pricingUtils";
-import QRCode from "qrcode";
+import QrPosterDialog from "../components/QrPosterDialog";
 import { toast } from "../components/ui/use-toast";
 import { Toaster } from "../components/ui/toaster";
 import {
@@ -83,13 +83,13 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
   const [overallSuccess, setOverallSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recentJobs, setRecentJobs] = useState<PrintJob[]>([]);
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [showQrCode, setShowQrCode] = useState(false);
 
   // Preview States
   const [previewJob, setPreviewJob] = useState<{ job: PrintJob; url: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Pricing & Pages States
   const [shopSettings, setShopSettings] = useState<ShopSettings | null>(propSettings || null);
@@ -267,57 +267,7 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
     }
   };
 
-  const generateQRCode = async () => {
-    try {
-      // Get local IP address for network access
-      const localIP = await getLocalIP();
-      const currentPort = window.location.port;
-      const qrData = `http://${localIP}:${currentPort}?ref=upload&lang=${lang}&shop=${encodeURIComponent(localIP)}`;
-
-      const qrCodeDataUrl = await QRCode.toDataURL(qrData, {
-        width: 256,
-        margin: 2,
-        color: {
-          dark: "#1f2937",
-          light: "#ffffff",
-        },
-      });
-
-      setQrCodeUrl(qrCodeDataUrl);
-      setShowQrCode(true);
-    } catch (err) {
-      console.error("Error generating QR code:", err);
-      setError(isRtl ? "فشل إنشاء رمز QR" : "Failed to generate QR code");
-    }
-  };
-
-  const getLocalIP = async (): Promise<string> => {
-    try {
-      const response = await fetch("/api/local-ip");
-      if (!response.ok) {
-        throw new Error("Failed to fetch local IP");
-      }
-      const data = await response.json();
-      return data.ip;
-    } catch (err) {
-      console.error(
-        "Failed to get local IP from API, falling back to hostname:",
-        err,
-      );
-      return window.location.hostname;
-    }
-  };
-
-  const downloadQRCode = () => {
-    if (qrCodeUrl) {
-      const link = document.createElement("a");
-      link.download = `qrcode-${Date.now()}.png`;
-      link.href = qrCodeUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
+  const generateQRCode = () => setShowQrCode(true);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
@@ -498,13 +448,13 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
   }
 
   return (
-    <div className={`w-full max-w-3xl mx-auto px-3 sm:px-4 ${isRtl ? "rtl" : ""}`}>
+    <div className={`w-full max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6 ${isRtl ? "rtl" : ""}`}>
       <div className="text-center mb-5">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
           {t("uploadTitle")}
         </h1>
         <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">{t("uploadSub")}</p>
-        <div className="mt-4 flex justify-center gap-3">
+        <div className="mt-4 flex flex-wrap justify-center gap-x-3 gap-y-1">
           <Button
             variant="link"
             onClick={generateQRCode}
@@ -542,9 +492,9 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
 
       <form
         onSubmit={handleSubmit}
-        className="bg-white dark:bg-gray-800 p-4 sm:p-6 lg:p-7 rounded-2xl shadow-xl shadow-indigo-100/40 dark:shadow-indigo-900/20 border border-white dark:border-gray-700 space-y-4 sm:space-y-5 mb-8"
+        className="bg-white dark:bg-gray-800 p-3 sm:p-6 lg:p-7 rounded-2xl shadow-xl shadow-indigo-100/40 dark:shadow-indigo-900/20 border border-white dark:border-gray-700 space-y-4 sm:space-y-5 mb-8"
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">
               {t("customerName")}{" "}
@@ -600,13 +550,13 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
         </div>
 
         {/* Print Preferences Section */}
-        <div className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
-          <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4">
+        <div className="bg-gray-50 dark:bg-gray-900/50 p-3 sm:p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
+          <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3 sm:mb-4">
             {isRtl ? "تفضيلات الطباعة" : "Print Preferences"}
           </label>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {/* Color Mode */}
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">
@@ -751,12 +701,30 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
           </div>
         </div>
 
-        <div className="relative">
+        <div>
           <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
             {t("selectFile")}
           </label>
+
+          {/* Hidden inputs — one for the file picker, one for the phone camera */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            multiple
+            accept=".pdf,.docx,.xlsx,.xls,.ppt,.pptx,.jpg,.jpeg,.png,image/jpeg,image/png"
+          />
+          <input
+            type="file"
+            ref={cameraInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept="image/*"
+            capture="environment"
+          />
+
           <div
-            onClick={() => fileInputRef.current?.click()}
             onDragOver={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -794,38 +762,59 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
                 }
               }
             }}
-            className={`border-2 border-dashed rounded-xl p-5 sm:p-8 text-center cursor-pointer transition-all active:scale-[0.99] touch-manipulation ${
+            className={`rounded-xl border-2 border-dashed transition-colors ${
               isDragging
-                ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20"
-                : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+                ? "border-indigo-500 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
+                : "border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-900/30"
             }`}
           >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              multiple
-              accept=".pdf,.docx,.xlsx,.xls,.ppt,.pptx,.jpg,.jpeg,.png,image/jpeg,image/png"
-            />
-            <div className="flex flex-col items-center gap-1 sm:gap-2">
+            <div className="p-4 sm:p-6 flex flex-col items-center gap-3 sm:gap-4">
               <svg
-                className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 dark:text-gray-500"
+                className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 dark:text-gray-500"
                 fill="none"
                 stroke="currentColor"
+                strokeWidth="1.6"
                 viewBox="0 0 24 24"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                ></path>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
               </svg>
-              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 font-medium">
-                {t("dragDrop")}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-sm">
+                <Button
+                  type="button"
+                  size="lg"
+                  disabled={isUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-12 gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6l2 2h8a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                  </svg>
+                  {isRtl ? "اختر ملفات" : "Choose files"}
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  disabled={isUploading}
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="w-full h-12 gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h3l2-2h6l2 2h3a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2z" />
+                    <circle cx="12" cy="13" r="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {isRtl ? "التقط صورة" : "Take photo"}
+                </Button>
+              </div>
+
+              <p className="hidden sm:block text-xs text-gray-500 dark:text-gray-400">
+                {isRtl ? "أو اسحب الملفات هنا" : "Or drop files here"}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("fileLimit")}</p>
+              <p className="text-[11px] sm:text-xs text-center text-gray-500 dark:text-gray-400 leading-snug">
+                {t("fileLimit")}
+              </p>
             </div>
           </div>
         </div>
@@ -1307,54 +1296,12 @@ const UploadView: React.FC<UploadViewProps> = ({ lang, shopSettings: propSetting
         </div>
       )}
 
-      {/* QR Code Dialog */}
-      <Dialog open={showQrCode} onOpenChange={setShowQrCode}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{isRtl ? "رمز QR للموقع" : "QR Code for Upload Page"}</DialogTitle>
-            <DialogDescription>
-              {isRtl
-                ? "امسح هذا الرمز للوصول السريع إلى صفحة الرفع"
-                : "Scan this code for quick access to the upload page"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground mb-4">
-              {isRtl
-                ? "يعمل على نفس الشبكة المحلية فقط"
-                : "Works on the same local network only"}
-            </p>
-            {qrCodeUrl && (
-              <div className="flex justify-center mb-4">
-                <img
-                  src={qrCodeUrl}
-                  alt="QR Code"
-                  className="border-2 border-gray-200 dark:border-gray-700 rounded-lg"
-                />
-              </div>
-            )}
-            <Button
-              onClick={downloadQRCode}
-              className="w-full gap-2"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              {isRtl ? "تحميل رمز QR" : "Download QR Code"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <QrPosterDialog
+        open={showQrCode}
+        onOpenChange={setShowQrCode}
+        lang={lang}
+        shopSettings={shopSettings}
+      />
 
       <PreviewModal
         open={previewJob !== null}

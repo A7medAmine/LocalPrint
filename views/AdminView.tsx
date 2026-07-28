@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Language, PrintJob, PrintStatus, PaymentStatus, ShopSettings, DiscountRule, DiscountType, ConditionType, PaperType } from "../types";
 import { TRANSLATIONS } from "../constants";
 import { storageService } from "../services/storageService";
@@ -47,6 +47,7 @@ import {
 } from "../components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import PreviewModal from "../components/preview/PreviewModal";
+import QrPosterDialog from "../components/QrPosterDialog";
 import LanguageToggle from "../components/LanguageToggle";
 import InventorySection from "../components/InventorySection";
 
@@ -96,7 +97,22 @@ const AdminView: React.FC<AdminViewProps> = ({
 
   const [groups, setGroups] = useState<CustomerGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"jobs" | "settings" | "gmail" | "review" | "inventory">("jobs");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const validTabs = ["jobs", "settings", "gmail", "review", "inventory"] as const;
+  type AdminTab = (typeof validTabs)[number];
+  const urlTab = searchParams.get("tab") as AdminTab | null;
+  const activeTab: AdminTab = urlTab && validTabs.includes(urlTab) ? urlTab : "jobs";
+  const setActiveTab = (next: AdminTab) => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (next === "jobs") p.delete("tab");
+        else p.set("tab", next);
+        return p;
+      },
+      { replace: true },
+    );
+  };
   const [lowStockCount, setLowStockCount] = useState(0);
   const [reviewJobs, setReviewJobs] = useState<PrintJob[]>([]);
   const [rejectDialogJob, setRejectDialogJob] = useState<PrintJob | null>(null);
@@ -112,6 +128,7 @@ const AdminView: React.FC<AdminViewProps> = ({
 
   const [editingJob, setEditingJob] = useState<PrintJob | null>(null);
   const [editingBlob, setEditingBlob] = useState<Blob | null>(null);
+  const [qrPosterOpen, setQrPosterOpen] = useState(false);
 
   const [shopName, setShopName] = useState(currentSettings.shopName);
   const [logoUrl, setLogoUrl] = useState<string | null>(
@@ -1256,7 +1273,7 @@ const AdminView: React.FC<AdminViewProps> = ({
         {/* Nav items */}
         <nav className="flex-1 px-3 py-2 space-y-0.5">
           {navItems.map((item) => {
-            const isActive = activeNav === item.id || (activeNav === "jobs" && item.id === "dashboard");
+            const isActive = activeNav === item.id;
             return (
               <button
                 key={item.id}
@@ -2920,6 +2937,42 @@ const AdminView: React.FC<AdminViewProps> = ({
               </CardContent>
             </Card>
 
+            {/* QR Poster Card */}
+            <Card className="lg:col-span-2 border-0">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{isRtl ? "ملصق QR للمتجر" : "Shop QR Poster"}</CardTitle>
+                    <CardDescription>
+                      {isRtl
+                        ? "أنشئ ملصق A4 بشعار المتجر ورمز QR جاهزًا للطباعة والعرض"
+                        : "Generate an A4 poster with your shop branding and QR, ready to print and display"}
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md">
+                    {isRtl
+                      ? "يمكنك اختيار رابط الشبكة المحلية أو رابط الموقع الإلكتروني قبل الطباعة."
+                      : "Pick the local-network link or the online website link before printing."}
+                  </p>
+                  <Button onClick={() => setQrPosterOpen(true)} className="gap-2 w-full sm:w-auto">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V4h12v5M6 18h12v-6H6zM6 14H4a2 2 0 01-2-2V9a2 2 0 012-2h16a2 2 0 012 2v3a2 2 0 01-2 2h-2" />
+                    </svg>
+                    {isRtl ? "فتح ملصق QR" : "Open QR Poster"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Inventory Card */}
             <Card className="lg:col-span-2 border-0">
               <CardHeader>
@@ -3074,6 +3127,14 @@ const AdminView: React.FC<AdminViewProps> = ({
           </div>
         )}
       </div>
+
+      <QrPosterDialog
+        open={qrPosterOpen}
+        onOpenChange={setQrPosterOpen}
+        lang={lang}
+        shopSettings={currentSettings}
+        allowPrint
+      />
 
       {/* Bulk Delete Confirmation */}
       <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
