@@ -303,13 +303,40 @@ const AdminView: React.FC<AdminViewProps> = ({
   const handleGmailConnect = async () => {
     try {
       const url = await storageService.getGmailAuthUrl();
+      // window.open returns a real Window in a normal browser and null in
+      // Electron (the main process routes OAuth to the OS browser so it
+      // reuses the user's existing Google session). Support both:
+      //   - Browser: watch popup.closed, then refresh status.
+      //   - Electron / popup blocked: poll /api/gmail/status until it flips
+      //     to connected, or give up after 2 min.
       const popup = window.open(url, 'gmail-auth', 'width=600,height=700');
-      const pollTimer = setInterval(async () => {
-        if (popup?.closed) {
-          clearInterval(pollTimer);
-          await loadGmailStatus();
+
+      const started = Date.now();
+      const MAX_WAIT_MS = 2 * 60_000;
+
+      const timer = setInterval(async () => {
+        // Timeout: user closed the browser tab without finishing.
+        if (Date.now() - started > MAX_WAIT_MS) {
+          clearInterval(timer);
+          return;
         }
-      }, 1000);
+        // Browser flow: popup closed → auth done (or user canceled).
+        if (popup && popup.closed) {
+          clearInterval(timer);
+          await loadGmailStatus();
+          return;
+        }
+        // Electron flow (popup === null): poll the server for status change.
+        if (!popup) {
+          try {
+            const status = await storageService.getGmailStatus();
+            if (status.connected) {
+              clearInterval(timer);
+              await loadGmailStatus();
+            }
+          } catch { /* transient — keep polling */ }
+        }
+      }, 1500);
     } catch (err) {
       console.error("Failed to connect Gmail:", err);
     }

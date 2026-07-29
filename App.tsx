@@ -215,7 +215,10 @@ const App: React.FC = () => {
       )}
 
       <main className={`flex-grow flex flex-col transition-opacity duration-150 ${isAdminRoute ? "" : "container mx-auto py-6 px-4"} ${isTransitioning ? "opacity-0" : "opacity-100"}`}>
-        <div key={lang} className="animate-[langFadeIn_0.25s_ease-out] flex-1 flex flex-col">
+        {/* No key={lang} here — that was remounting every route (including
+            the PDF Studio) on language change and wiping local state like
+            the loaded PDF. `useLanguage` already re-renders in place. */}
+        <div className="flex-1 flex flex-col">
           <Routes>
             <Route path="/upload" element={<UploadView lang={lang} shopSettings={settings} />} />
             <Route
