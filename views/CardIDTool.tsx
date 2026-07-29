@@ -7,7 +7,12 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
+import { Switch } from "../components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { toast } from "../components/ui/use-toast";
+import { isElectron, printData } from "../lib/electronPrint";
+import { storageService } from "../services/storageService";
+import type { PrinterJobDefaults } from "../types";
 import {
   Dialog,
   DialogContent,
@@ -119,7 +124,8 @@ function computeGrid(pw: number, ph: number, margin: number, cols: number, rows:
 }
 
 const CardIDTool: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const isRtl = lang === "ar";
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
   const [frontDataUrl, setFrontDataUrl] = useState<string | null>(null);
@@ -141,6 +147,21 @@ const CardIDTool: React.FC = () => {
   const [margin, setMargin] = useState(10);
   const [sizeIdx, setSizeIdx] = useState(0);
   const [paperIdx, setPaperIdx] = useState(0);
+  // Card printing is duplex by default — front sheet + back sheet on the same
+  // physical card. Kept togglable in case someone's printer can't duplex or
+  // they're printing to two separate sheets.
+  const [duplex, setDuplex] = useState(true);
+  const [printing, setPrinting] = useState(false);
+  const [defaultPrinter, setDefaultPrinter] = useState<string>("");
+  const [printerDefaults, setPrinterDefaults] = useState<Record<string, PrinterJobDefaults>>({});
+
+  useEffect(() => {
+    if (!isElectron()) return;
+    storageService.getSettings().then((s) => {
+      setDefaultPrinter(s.defaultPrinterName || "");
+      setPrinterDefaults(s.printerDefaults || {});
+    }).catch(() => {});
+  }, []);
   const PP_W = PAPER_SIZES[paperIdx].w;
   const PP_H = PAPER_SIZES[paperIdx].h;
   const PAD = 10 * MM_TO_PT;
@@ -313,8 +334,48 @@ const CardIDTool: React.FC = () => {
   const handlePrint = async () => {
     const blob = await generatePdf();
     if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
+    // Browser fallback — no native bridge available.
+    if (!isElectron()) {
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      return;
+    }
+    setPrinting(true);
+    try {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const printer = defaultPrinter;
+      const saved = printer ? printerDefaults[printer] : undefined;
+      // Duplex: user's toggle wins. Long-edge is the standard for card layouts
+      // where front is on the left half and back on the right half of the same
+      // page, so flipping along the long edge aligns them.
+      const options = {
+        duplexMode: duplex ? "longEdge" : "simplex",
+        color: saved?.color ?? true,
+        copies: saved?.copies ?? 1,
+        collate: saved?.collate ?? true,
+        landscape: saved?.landscape ?? false,
+      } as const;
+      const result = await printData({
+        data: bytes,
+        fileType: "application/pdf",
+        printerName: printer,
+        silent: !!printer,
+        options,
+      });
+      if (result.cancelled) {
+        toast({ title: isRtl ? "تم إلغاء الطباعة" : "Print cancelled" });
+      } else if (result.ok) {
+        toast({ title: isRtl ? "تم إرسال المهمة" : "Sent to printer", variant: "success" });
+      }
+    } catch (err: any) {
+      toast({
+        title: isRtl ? "فشل الطباعة" : "Print failed",
+        description: err?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const handleAddToJobs = async () => {
@@ -421,6 +482,20 @@ const CardIDTool: React.FC = () => {
           </CardContent>
         </Card>
 
+        <div className="flex items-center justify-between rounded-xl border border-input px-3 py-2">
+          <div className="min-w-0">
+            <Label className="text-xs font-medium cursor-pointer">
+              {isRtl ? "طباعة على الوجهين" : "Duplex printing"}
+            </Label>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {isRtl
+                ? "الأمام والخلف على نفس البطاقة (افتراضي)"
+                : "Front and back on the same card (default)"}
+            </p>
+          </div>
+          <Switch checked={duplex} onCheckedChange={setDuplex} />
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <Button
             disabled={(!frontDataUrl && !backDataUrl) || exporting}
@@ -429,11 +504,11 @@ const CardIDTool: React.FC = () => {
             {exporting ? "..." : t("download")}
           </Button>
           <Button
-            disabled={(!frontDataUrl && !backDataUrl) || exporting}
+            disabled={(!frontDataUrl && !backDataUrl) || exporting || printing}
             variant="secondary"
             onClick={handlePrint}
           >
-            {t("print")}
+            {printing ? "..." : t("print")}
           </Button>
           <Button
             disabled={(!frontDataUrl && !backDataUrl) || exporting}

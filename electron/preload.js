@@ -20,4 +20,11 @@ contextBridge.exposeInMainWorld('electronPrint', {
   //                copies, collate, landscape, …)
   // Resolves { ok: true, handedOff?: boolean } or rejects with an Error.
   printFile: (payload) => ipcRenderer.invoke('print-file', payload),
+
+  // payload: { data, fileType, extension?, printerName, silent, options }
+  //   - data       Uint8Array of the file bytes (Print Studio uses this
+  //                for card layouts / reordered PDFs it builds in-memory)
+  //   - extension  file extension to use for the tmp file (default ".pdf")
+  //   Everything else matches printFile.
+  printData: (payload) => ipcRenderer.invoke('print-data', payload),
 });

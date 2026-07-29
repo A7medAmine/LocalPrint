@@ -11,6 +11,8 @@
 import { app, BrowserWindow, Menu, shell, ipcMain } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 
@@ -295,6 +297,38 @@ ipcMain.handle('get-printers', async () => {
     return await tmp.webContents.getPrintersAsync();
   } finally {
     tmp.destroy();
+  }
+});
+
+// Print Studio generates PDFs in-memory (card layouts, page reorders) that
+// never touch the jobs store. Rather than saving them just to print, the
+// renderer sends the raw bytes here — we drop them in the OS tmp dir, print,
+// then unlink. Same IPC surface as print-file so both share nativePrint.
+ipcMain.handle('print-data', async (_event, payload) => {
+  const { data, fileType, printerName, silent, options, extension } = payload || {};
+  if (!data || !(data instanceof Uint8Array || Buffer.isBuffer(data) || data instanceof ArrayBuffer)) {
+    throw new Error('print-data: data (Uint8Array/Buffer) is required');
+  }
+  const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  const ext = extension && /^\.[a-z0-9]+$/i.test(extension) ? extension : '.pdf';
+  const tmpPath = path.join(os.tmpdir(), `printshop-${crypto.randomBytes(8).toString('hex')}${ext}`);
+  fs.writeFileSync(tmpPath, buf);
+  const cleanup = () => { try { fs.unlinkSync(tmpPath); } catch { /* already gone */ } };
+  try {
+    if (!isChromiumPrintable(fileType || 'application/pdf')) {
+      const errMsg = await shell.openPath(tmpPath);
+      if (errMsg) throw new Error(errMsg);
+      // Don't unlink immediately — the external app still has the file open.
+      // Best-effort cleanup after a minute.
+      setTimeout(cleanup, 60_000);
+      return { ok: true, handedOff: true };
+    }
+    const result = await nativePrint({ filePath: tmpPath, printerName, silent, options });
+    cleanup();
+    return result;
+  } catch (err) {
+    cleanup();
+    throw err;
   }
 });
 

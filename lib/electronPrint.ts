@@ -21,6 +21,15 @@ export interface PrintFilePayload {
   options?: Partial<PrinterJobDefaults> & Record<string, unknown>;
 }
 
+export interface PrintDataPayload {
+  data: Uint8Array;
+  fileType: string;
+  extension?: string;
+  printerName?: string;
+  silent?: boolean;
+  options?: Partial<PrinterJobDefaults> & Record<string, unknown>;
+}
+
 export interface PrintFileResult {
   ok: boolean;
   cancelled?: boolean;
@@ -30,6 +39,7 @@ export interface PrintFileResult {
 interface ElectronPrintBridge {
   getPrinters(): Promise<PrinterInfo[]>;
   printFile(payload: PrintFilePayload): Promise<PrintFileResult>;
+  printData(payload: PrintDataPayload): Promise<PrintFileResult>;
 }
 
 function bridge(): ElectronPrintBridge | null {
@@ -51,4 +61,10 @@ export async function printFile(payload: PrintFilePayload): Promise<PrintFileRes
   const b = bridge();
   if (!b) throw new Error("Native printing is only available in the desktop app.");
   return b.printFile(payload);
+}
+
+export async function printData(payload: PrintDataPayload): Promise<PrintFileResult> {
+  const b = bridge();
+  if (!b) throw new Error("Native printing is only available in the desktop app.");
+  return b.printData(payload);
 }

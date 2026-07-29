@@ -27,7 +27,8 @@ import {
 import { cn } from "../lib/utils";
 import { storageService } from "../services/storageService";
 import { toast } from "../components/ui/use-toast";
-import type { PrintJob } from "../types";
+import { isElectron, printData } from "../lib/electronPrint";
+import type { PrintJob, PrinterJobDefaults } from "../types";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = getPdfWorkerUrl();
 
@@ -111,6 +112,17 @@ const PDFJobManager: React.FC = () => {
   const [addJobNotes, setAddJobNotes] = useState("");
   const [addJobUploading, setAddJobUploading] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [defaultPrinter, setDefaultPrinter] = useState<string>("");
+  const [printerDefaults, setPrinterDefaults] = useState<Record<string, PrinterJobDefaults>>({});
+
+  useEffect(() => {
+    if (!isElectron()) return;
+    storageService.getSettings().then((s) => {
+      setDefaultPrinter(s.defaultPrinterName || "");
+      setPrinterDefaults(s.printerDefaults || {});
+    }).catch(() => {});
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const tPages = t("studioPagesLabel");
@@ -400,11 +412,46 @@ const PDFJobManager: React.FC = () => {
     if (!pdfBytes || pages.length === 0) return;
     try {
       const output = await buildPdfFromPages();
-      const blob = new Blob([output], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-    } catch {
-      toast({ title: t("studioExportFailed"), variant: "destructive" });
+      // Browser fallback — no native bridge available.
+      if (!isElectron()) {
+        const blob = new Blob([output], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        return;
+      }
+      setPrinting(true);
+      const saved = defaultPrinter ? printerDefaults[defaultPrinter] : undefined;
+      // The studio's own controls win over the printer's saved defaults —
+      // copies/color/duplex are what the operator just set in this pane.
+      // Duplex here means two-sided printing along the long edge, which is
+      // what the "Duplex" toggle in the studio already implies.
+      const options = {
+        duplexMode: duplex ? "longEdge" : "simplex",
+        color: colorMode !== "bw",
+        copies,
+        collate: saved?.collate ?? true,
+        landscape: saved?.landscape ?? false,
+      } as const;
+      const result = await printData({
+        data: output,
+        fileType: "application/pdf",
+        printerName: defaultPrinter,
+        silent: !!defaultPrinter,
+        options,
+      });
+      if (result.cancelled) {
+        toast({ title: isRtl ? "تم إلغاء الطباعة" : "Print cancelled" });
+      } else if (result.ok) {
+        toast({ title: isRtl ? "تم إرسال المهمة" : "Sent to printer", variant: "success" });
+      }
+    } catch (err: any) {
+      toast({
+        title: isRtl ? "فشل الطباعة" : "Print failed",
+        description: err?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -707,9 +754,9 @@ const PDFJobManager: React.FC = () => {
                 <CardTitle className="text-sm font-semibold">{t("studioActions")}</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0 space-y-2">
-                <Button className="w-full gap-2" size="sm" onClick={printDirectly}>
+                <Button className="w-full gap-2" size="sm" onClick={printDirectly} disabled={printing}>
                   <Icon d={ICONS.printer} />
-                  {t("studioPrintDirect")}
+                  {printing ? (isRtl ? "جارٍ الإرسال..." : "Sending...") : t("studioPrintDirect")}
                 </Button>
                 <Button className="w-full gap-2" size="sm" variant="outline" onClick={exportPDF} disabled={exporting}>
                   <Icon d={ICONS.download} />
