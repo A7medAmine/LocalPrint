@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Language, PrintJob, PrintStatus, PaymentStatus, ShopSettings, DiscountRule, DiscountType, ConditionType, PaperType } from "../types";
+import { Language, PrintJob, PrintStatus, PaymentStatus, ShopSettings, DiscountRule, DiscountType, ConditionType, PaperType, PrinterJobDefaults } from "../types";
 import { TRANSLATIONS } from "../constants";
 import { storageService } from "../services/storageService";
+import { isElectron, getPrinters, printFile, PrinterInfo } from "../lib/electronPrint";
 import {
   calculatePrintPrice,
   getActualPageCount,
@@ -12,6 +13,7 @@ import {
   calculateCustomerTotalWithDiscounts,
 } from "../utils/pricingUtils";
 import { formatRelativeTime } from "../utils/timeUtils";
+import { cn } from "../lib/utils";
 import ImageEditor from "../components/ImageEditor";
 import { toast } from "../components/ui/use-toast";
 import { Toaster } from "../components/ui/toaster";
@@ -38,6 +40,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Switch } from "../components/ui/switch";
+import { Label } from "../components/ui/label";
 import {
   Select,
   SelectContent,
@@ -162,6 +165,15 @@ const AdminView: React.FC<AdminViewProps> = ({
   const [cloudSyncPollInterval, setCloudSyncPollInterval] = useState(currentSettings.cloudSyncPollInterval || "30000");
   const [autoAcceptCloudJobs, setAutoAcceptCloudJobs] = useState(currentSettings.autoAcceptCloudJobs !== false);
   const [autoDeductStock, setAutoDeductStock] = useState(currentSettings.autoDeductStock === true);
+  // Printers (Electron-only surface). `printers` is populated on demand from
+  // the main-process IPC; empty in a plain browser session.
+  const [printers, setPrinters] = useState<PrinterInfo[]>([]);
+  const [printersLoading, setPrintersLoading] = useState(false);
+  const [printersError, setPrintersError] = useState<string | null>(null);
+  const [defaultPrinterName, setDefaultPrinterName] = useState<string>(currentSettings.defaultPrinterName || "");
+  const [printerDefaults, setPrinterDefaults] = useState<Record<string, PrinterJobDefaults>>(
+    currentSettings.printerDefaults || {},
+  );
 
   // Gmail integration state
   const [gmailConnected, setGmailConnected] = useState(false);
@@ -616,7 +628,30 @@ const AdminView: React.FC<AdminViewProps> = ({
     if (currentSettings.cloudSyncPollInterval) setCloudSyncPollInterval(currentSettings.cloudSyncPollInterval);
     setAutoAcceptCloudJobs(currentSettings.autoAcceptCloudJobs !== false);
     setAutoDeductStock(currentSettings.autoDeductStock === true);
+    setDefaultPrinterName(currentSettings.defaultPrinterName || "");
+    setPrinterDefaults(currentSettings.printerDefaults || {});
   }, [currentSettings]);
+
+  const loadPrinters = React.useCallback(async () => {
+    if (!isElectron()) return;
+    setPrintersLoading(true);
+    setPrintersError(null);
+    try {
+      const list = await getPrinters();
+      setPrinters(list);
+    } catch (err) {
+      setPrintersError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPrintersLoading(false);
+    }
+  }, []);
+
+  // Enumerate printers on mount so the settings section is ready without
+  // an extra click. Cheap enough (Chromium caches it) that eager-loading
+  // is fine.
+  useEffect(() => {
+    loadPrinters();
+  }, [loadPrinters]);
 
   const loadJobs = async () => {
     setLoading(true);
@@ -854,66 +889,145 @@ const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  // Native printing (Electron). Everything below routes through the
+  // print-file IPC — the old "window.open + window.print" flow only made
+  // sense when this ran in a plain browser, and it never gave us silent
+  // printing or per-printer defaults. Office docs get handed to the OS
+  // registered app via shell.openPath (same channel, different branch in
+  // electron/main.js).
 
-  const handlePrint = async (job: PrintJob) => {
-    const url = await storageService.getFileUrl(job.id);
-    if (!url) return;
+  const defaultsForActivePrinter = (): PrinterJobDefaults | null => {
+    if (!defaultPrinterName) return null;
+    return printerDefaults[defaultPrinterName] || null;
+  };
 
-    if (job.fileType === "application/pdf") {
-      window.open(url, "_blank");
+  const printJobViaIpc = async (
+    job: PrintJob,
+    mode: "quick" | "options" | "open",
+  ) => {
+    if (!isElectron()) {
+      toast({
+        title: isRtl ? "الطباعة الأصلية غير متوفرة" : "Native printing unavailable",
+        description: isRtl
+          ? "افتح التطبيق من سطح المكتب للطباعة."
+          : "Open the desktop app to print.",
+        variant: "destructive",
+      });
       return;
     }
 
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      const title = escapeHtml(job.fileName);
-      printWindow.document.write(`
-        <html>
-          <head><title>Print - ${title}</title></head>
-          <body style="margin:0; display:flex; justify-content:center;">
-            <img src="${url}" style="max-width:100%; max-height:100vh;" onload="window.print(); window.close();" />
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
+    const filePath = await storageService.getFileLocalPath(job.id);
+    if (!filePath) {
+      toast({
+        title: isRtl ? "تعذر تحديد مسار الملف" : "Could not resolve file path",
+        description: job.fileName,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Office docs — no printer/options; the OS handler takes over.
+    if (mode === "open") {
+      try {
+        const result = await printFile({ filePath, fileType: job.fileType });
+        if (result.ok) {
+          toast({
+            title: isRtl ? "تم فتح الملف في التطبيق الافتراضي" : "Opened in default app",
+            description: job.fileName,
+            variant: "success",
+          });
+        }
+      } catch (err) {
+        toast({
+          title: isRtl ? "تعذر فتح الملف" : "Failed to open file",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Quick Print requires a saved default printer — without one, silent
+    // printing would fall through to "whatever Chromium picks" which is
+    // exactly the surprise this feature is supposed to prevent.
+    if (mode === "quick" && !defaultPrinterName) {
+      toast({
+        title: isRtl ? "لم يتم تعيين طابعة افتراضية" : "No default printer set",
+        description: isRtl
+          ? "اختر طابعة افتراضية من الإعدادات."
+          : "Pick a default printer in Settings.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // The job already carries the customer's chosen copies + color mode
+    // (see printPreferences). Those beat the printer's saved defaults —
+    // duplex/collate/landscape still come from the printer defaults since
+    // they're printer-hardware concerns, not per-order choices.
+    const defaults = defaultsForActivePrinter();
+    const jobCopies = Math.max(1, Number(job.printPreferences?.copies) || 1);
+    const jobColor = job.printPreferences?.colorMode
+      ? job.printPreferences.colorMode !== "blackWhite"
+      : defaults?.color ?? true;
+    const options = {
+      duplexMode: defaults?.duplexMode ?? "simplex",
+      color: jobColor,
+      copies: jobCopies,
+      collate: defaults?.collate ?? true,
+      landscape: defaults?.landscape ?? false,
+    };
+
+    try {
+      const result = await printFile({
+        filePath,
+        fileType: job.fileType,
+        // Options dialog: empty deviceName lets the OS dialog show every
+        // printer, pre-selected to none — the user picks. Silent: always
+        // route to the saved default.
+        printerName: mode === "quick" ? defaultPrinterName : (defaultPrinterName || ""),
+        silent: mode === "quick",
+        options,
+      });
+      if (result.cancelled) {
+        toast({ title: isRtl ? "تم إلغاء الطباعة" : "Print cancelled" });
+        return;
+      }
+      if (result.ok) {
+        toast({
+          title: mode === "quick"
+            ? (isRtl ? "تم إرسال المهمة" : "Sent to printer")
+            : (isRtl ? "تم إرسال المهمة" : "Print job submitted"),
+          description: job.fileName,
+          variant: "success",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: isRtl ? "فشل الطباعة" : "Print failed",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
     }
   };
+
+  const handleQuickPrint = (job: PrintJob) => printJobViaIpc(job, "quick");
+  const handlePrintOptions = (job: PrintJob) => printJobViaIpc(job, "options");
+  const handleOpenInApp = (job: PrintJob) => printJobViaIpc(job, "open");
 
   const handleBulkPrint = async () => {
     const selectedJobs = groups
       .flatMap((g) => g.jobs)
       .filter((j) => selectedJobIds.has(j.id));
     if (selectedJobs.length === 0) return;
-
-    const images = selectedJobs.filter((j) => j.fileType.includes("image"));
-    const pdfs = selectedJobs.filter((j) => j.fileType === "application/pdf");
-
-    if (images.length > 0) {
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        const doc = printWindow.document;
-        doc.write("<!DOCTYPE html><html><head><title>Bulk Print Images</title></head><body style='margin:0'>");
-        for (const img of images) {
-          const url = await storageService.getFileUrl(img.id);
-          const div = doc.createElement("div");
-          div.style.cssText = "page-break-after:always;display:flex;justify-content:center;align-items:center;height:100vh";
-          const imgEl = doc.createElement("img");
-          imgEl.src = url;
-          imgEl.style.cssText = "max-width:100%;max-height:100%";
-          div.appendChild(imgEl);
-          doc.body.appendChild(div);
-        }
-        const script = doc.createElement("script");
-        script.textContent = "window.onload=function(){window.print();window.close()}";
-        doc.body.appendChild(script);
-        doc.close();
+    // Bulk = Quick Print each printable job in sequence. Office docs get
+    // handed to their default app the same way single-job Open does.
+    for (const job of selectedJobs) {
+      if (isOfficeFile(job.fileType)) {
+        await printJobViaIpc(job, "open");
+      } else {
+        await printJobViaIpc(job, "quick");
       }
-    }
-
-    for (const pdf of pdfs) {
-      const url = await storageService.getFileUrl(pdf.id);
-      if (url) window.open(url, "_blank");
     }
   };
 
@@ -1208,8 +1322,8 @@ const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const saveSettings = async () => {
-    await storageService.saveSettings({ shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval, autoAcceptCloudJobs, autoDeductStock });
-    onSettingsUpdate({ ...currentSettings, shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval, autoAcceptCloudJobs, autoDeductStock });
+    await storageService.saveSettings({ shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval, autoAcceptCloudJobs, autoDeductStock, defaultPrinterName, printerDefaults });
+    onSettingsUpdate({ ...currentSettings, shopName, paperTypes, phoneNumbers, email, address, workingHours, returnPolicy, cloudSyncUrl, shopApiToken, cloudSyncPollInterval, autoAcceptCloudJobs, autoDeductStock, defaultPrinterName, printerDefaults });
     toast({ title: isRtl ? "تم الحفظ بنجاح" : "Settings saved successfully", variant: "success" });
   };
 
@@ -2068,10 +2182,37 @@ const AdminView: React.FC<AdminViewProps> = ({
                                     </td>
                                     <td className="px-4 py-2 align-middle">
                                       <div className="flex items-center gap-0.5 w-max">
-                                        {!officeFile && (
-                                          <Button variant="ghost" size="icon" onClick={() => handlePrint(job)} title={t("print")} className="text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-white/10 w-8 h-8">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                                        {officeFile ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => handleOpenInApp(job)}
+                                            title={isRtl ? "فتح في التطبيق" : "Open in default app"}
+                                            className="text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-white/10 w-8 h-8"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                                           </Button>
+                                        ) : (
+                                          <>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => handleQuickPrint(job)}
+                                              title={isRtl ? `طباعة سريعة${defaultPrinterName ? ` — ${defaultPrinterName}` : ""}` : `Quick Print${defaultPrinterName ? ` — ${defaultPrinterName}` : ""}`}
+                                              className="text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-white/10 w-8 h-8"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => handlePrintOptions(job)}
+                                              title={isRtl ? "خيارات الطباعة" : "Print options"}
+                                              className="text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-white/10 w-8 h-8"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                            </Button>
+                                          </>
                                         )}
                                         <Button variant="ghost" size="icon" onClick={() => handlePreview(job)} title={isRtl ? "معاينة" : "Preview"} className="text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-white/10 w-8 h-8">
                                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -3040,6 +3181,153 @@ const AdminView: React.FC<AdminViewProps> = ({
                     className="shrink-0"
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Printers Card (Electron-only surface) */}
+            <Card className="lg:col-span-2 border-0">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{isRtl ? "الطابعات" : "Printers"}</CardTitle>
+                    <CardDescription>{isRtl ? "اختر الطابعة الافتراضية واضبط إعدادات المهمة لكل طابعة" : "Choose a default printer and set per-printer job defaults"}</CardDescription>
+                  </div>
+                  <div className="ms-auto">
+                    <Button variant="outline" size="sm" onClick={loadPrinters} disabled={printersLoading} className="gap-2">
+                      <svg className={cn("w-4 h-4", printersLoading && "animate-spin")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      {isRtl ? "تحديث" : "Refresh"}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!isElectron() ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {isRtl
+                      ? "الطباعة الأصلية متاحة فقط داخل تطبيق سطح المكتب."
+                      : "Native printing is only available inside the desktop app."}
+                  </p>
+                ) : printersError ? (
+                  <p className="text-sm text-red-600 dark:text-red-400">{printersError}</p>
+                ) : printers.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {printersLoading
+                      ? (isRtl ? "جارٍ اكتشاف الطابعات..." : "Detecting printers…")
+                      : (isRtl ? "لم يتم العثور على طابعات مثبتة." : "No installed printers were found.")}
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {printers.map((p) => {
+                      const isDefault = defaultPrinterName === p.name;
+                      const d: PrinterJobDefaults = printerDefaults[p.name] || {
+                        duplexMode: "simplex",
+                        color: true,
+                        copies: 1,
+                        collate: true,
+                        landscape: false,
+                      };
+                      const patchDefaults = (patch: Partial<PrinterJobDefaults>) => {
+                        setPrinterDefaults((prev) => ({ ...prev, [p.name]: { ...d, ...patch } }));
+                      };
+                      return (
+                        <div
+                          key={p.name}
+                          className={cn(
+                            "rounded-xl border p-4",
+                            isDefault
+                              ? "border-indigo-400 dark:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20"
+                              : "border-gray-200 dark:border-gray-700",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-gray-900 dark:text-gray-100">
+                                  {p.displayName || p.name}
+                                </span>
+                                {p.isDefault && (
+                                  <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                    {isRtl ? "افتراضي النظام" : "System default"}
+                                  </span>
+                                )}
+                                {isDefault && (
+                                  <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                                    {isRtl ? "الطباعة السريعة" : "Quick Print"}
+                                  </span>
+                                )}
+                              </div>
+                              {p.description && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.description}</p>
+                              )}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant={isDefault ? "secondary" : "outline"}
+                              onClick={() => setDefaultPrinterName(isDefault ? "" : p.name)}
+                            >
+                              {isDefault
+                                ? (isRtl ? "الطابعة الافتراضية" : "Default printer")
+                                : (isRtl ? "تعيين كافتراضية" : "Set as default")}
+                            </Button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+                            <div>
+                              <Label className="text-xs">{isRtl ? "الوجهين" : "Duplex"}</Label>
+                              <Select
+                                value={d.duplexMode}
+                                onValueChange={(v) => patchDefaults({ duplexMode: v as PrinterJobDefaults["duplexMode"] })}
+                              >
+                                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="simplex">{isRtl ? "وجه واحد" : "Single-sided"}</SelectItem>
+                                  <SelectItem value="longEdge">{isRtl ? "وجهين (الحافة الطويلة)" : "Two-sided (long edge)"}</SelectItem>
+                                  <SelectItem value="shortEdge">{isRtl ? "وجهين (الحافة القصيرة)" : "Two-sided (short edge)"}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-xs">{isRtl ? "نسخ" : "Copies"}</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                className="mt-1"
+                                value={d.copies}
+                                onChange={(e) => patchDefaults({ copies: Math.max(1, parseInt(e.target.value || "1", 10) || 1) })}
+                              />
+                            </div>
+                            <div className="flex flex-col justify-between gap-2">
+                              <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
+                                <Label className="text-xs cursor-pointer">{isRtl ? "ألوان" : "Color"}</Label>
+                                <Switch checked={d.color} onCheckedChange={(c) => patchDefaults({ color: c })} />
+                              </div>
+                              <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
+                                <Label className="text-xs cursor-pointer">{isRtl ? "ترتيب" : "Collate"}</Label>
+                                <Switch checked={d.collate} onCheckedChange={(c) => patchDefaults({ collate: c })} />
+                              </div>
+                              <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
+                                <Label className="text-xs cursor-pointer">{isRtl ? "أفقي" : "Landscape"}</Label>
+                                <Switch checked={d.landscape} onCheckedChange={(c) => patchDefaults({ landscape: c })} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {isRtl
+                        ? "تُستخدم هذه الإعدادات كنقطة بداية للطباعة السريعة ولمربع حوار خيارات الطباعة."
+                        : "These defaults are the starting point for Quick Print and pre-fill the Options print dialog."}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

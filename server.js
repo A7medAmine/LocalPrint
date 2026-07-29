@@ -741,6 +741,29 @@ app.post("/api/backup/restore", requireAdmin, uploadMemory.single("file"), (req,
 });
 
 // Public file access by job ID — anyone with the job ID can download (must be before the admin catch-all)
+// Resolve a job to its absolute path on this machine. Admin-only — this
+// leaks the local FS layout, so the renderer only calls it inside the
+// Electron desktop app to feed the native print IPC. Path-traversal
+// protected same way as /api/files/*.
+app.get("/api/files/localpath/:id", requireAdmin, (req, res) => {
+  try {
+    const job = db.prepare('SELECT serverFileName FROM jobs WHERE id = ?').get(req.params.id);
+    if (!job || !job.serverFileName) {
+      return res.status(404).json({ error: "File not found" });
+    }
+    const filePath = path.resolve(path.join(UPLOADS_DIR, job.serverFileName));
+    if (!filePath.startsWith(path.resolve(UPLOADS_DIR))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "File not found on disk" });
+    }
+    res.json({ path: filePath });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.get("/api/files/public/:id", (req, res) => {
   try {
     const job = db.prepare('SELECT serverFileName, fileName FROM jobs WHERE id = ?').get(req.params.id);
@@ -868,6 +891,32 @@ app.post("/api/settings", requireAdmin, (req, res) => {
     }
     if (req.body.autoDeductStock !== undefined) {
       updateSetting('autoDeductStock', !!req.body.autoDeductStock);
+    }
+    // Printer settings — see electron/main.js for the print IPC that
+    // consumes these. defaultPrinterName is a plain string (Chromium's
+    // deviceName). printerDefaults is a { [printerName]: { duplexMode,
+    // color, copies, collate, landscape } } map used as the starting
+    // point for both Quick Print and the Options dialog.
+    if (req.body.defaultPrinterName !== undefined) {
+      updateSetting('defaultPrinterName', String(req.body.defaultPrinterName || ''));
+    }
+    if (req.body.printerDefaults !== undefined && typeof req.body.printerDefaults === 'object') {
+      const clean = {};
+      for (const [name, raw] of Object.entries(req.body.printerDefaults || {})) {
+        if (!name || typeof raw !== 'object' || raw === null) continue;
+        const duplex = ['simplex', 'shortEdge', 'longEdge'].includes(raw.duplexMode)
+          ? raw.duplexMode
+          : 'simplex';
+        const copiesNum = Number(raw.copies);
+        clean[name] = {
+          duplexMode: duplex,
+          color: raw.color !== false,
+          copies: Number.isFinite(copiesNum) && copiesNum >= 1 ? Math.floor(copiesNum) : 1,
+          collate: raw.collate !== false,
+          landscape: raw.landscape === true,
+        };
+      }
+      updateSetting('printerDefaults', clean);
     }
 
     const settings = getSettings();

@@ -8,7 +8,7 @@
 // deep-link/URL handling stay predictable. Port + host + NODE_ENV are set
 // before the server.js import so server.js picks them up on load.
 
-import { app, BrowserWindow, Menu, shell } from 'electron';
+import { app, BrowserWindow, Menu, shell, ipcMain } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -165,6 +165,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Preload exposes the print IPC bridge (window.electronPrint).
+      // Kept sandbox-compatible — see electron/preload.js.
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -202,6 +205,120 @@ function createWindow() {
   const baseUrl = IS_DEV ? DEV_URL : LOCAL_URL;
   mainWindow.loadURL(`${baseUrl}/admin`);
 }
+
+// MIME types Chromium can render (and therefore print) directly. Everything
+// else goes through shell.openPath — Word/Excel/etc. render fine only in
+// their native apps, and Chromium's built-in PDF viewer covers PDFs.
+function isChromiumPrintable(fileType) {
+  if (!fileType) return false;
+  if (fileType === 'application/pdf') return true;
+  if (fileType.startsWith('image/')) return true;
+  return false;
+}
+
+// Native print for a pdf/image on disk. A hidden BrowserWindow renders the
+// file, prints it, and is destroyed regardless of outcome so we don't leak
+// windows on driver errors.
+function nativePrint({ filePath, printerName, silent, options }) {
+  return new Promise((resolve, reject) => {
+    const win = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        // The built-in PDF viewer is what makes webContents.print() work
+        // against a PDF loaded via loadFile — it's on by default in
+        // Electron 33 but stating it here is documentation for the next
+        // reader.
+        plugins: true,
+      },
+    });
+
+    let settled = false;
+    const finish = (err, value) => {
+      if (settled) return;
+      settled = true;
+      try { win.destroy(); } catch { /* already gone */ }
+      if (err) reject(err);
+      else resolve(value);
+    };
+
+    // did-finish-load is Chromium telling us the document is laid out.
+    // For PDFs the built-in viewer emits it once the first page is ready.
+    win.webContents.once('did-finish-load', () => {
+      const printOptions = {
+        silent: silent === true,
+        // Empty deviceName tells Chromium to use the OS default printer.
+        deviceName: printerName || '',
+        // Print full-bleed for images/PDFs — page backgrounds matter.
+        printBackground: true,
+        ...(options || {}),
+      };
+      try {
+        win.webContents.print(printOptions, (success, failureReason) => {
+          if (success) return finish(null, { ok: true });
+          // User-cancelled dialog isn't an error the UI should shout about,
+          // but it also isn't a successful print — surface it distinctly.
+          // Chromium reports cancellation with a few different strings across
+          // versions/platforms ("cancelled", "canceled", "Print job canceled"),
+          // and sometimes with an empty reason when silent=false and the user
+          // dismisses the OS dialog. Treat all of those as cancellation.
+          const reason = String(failureReason || '').toLowerCase();
+          if (!reason || reason.includes('cancel')) {
+            return finish(null, { ok: false, cancelled: true });
+          }
+          finish(new Error(failureReason || 'Print failed'));
+        });
+      } catch (err) {
+        finish(err);
+      }
+    });
+
+    win.webContents.once('did-fail-load', (_e, _code, description) => {
+      finish(new Error(`Failed to load file for printing: ${description}`));
+    });
+
+    win.loadFile(filePath).catch((err) => finish(err));
+  });
+}
+
+// IPC surface — see electron/preload.js for the renderer-facing shape.
+ipcMain.handle('get-printers', async () => {
+  // getPrintersAsync lives on webContents, not app. Any live webContents
+  // works — prefer the main window if it exists, otherwise spin up a
+  // throwaway one just for the lookup.
+  const source = mainWindow?.webContents || null;
+  if (source) return source.getPrintersAsync();
+  const tmp = new BrowserWindow({ show: false });
+  try {
+    return await tmp.webContents.getPrintersAsync();
+  } finally {
+    tmp.destroy();
+  }
+});
+
+ipcMain.handle('print-file', async (_event, payload) => {
+  const { filePath, fileType, printerName, silent, options } = payload || {};
+  if (!filePath || typeof filePath !== 'string') {
+    throw new Error('print-file: filePath is required');
+  }
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`print-file: file not found (${filePath})`);
+  }
+
+  // Word/Excel/etc. — hand off to the OS's registered app. Same pattern
+  // Telegram/Slack use for "open with default app".
+  if (!isChromiumPrintable(fileType)) {
+    const errMsg = await shell.openPath(filePath);
+    // shell.openPath resolves to '' on success and to an error string on
+    // failure (e.g. no default app registered for that extension).
+    if (errMsg) throw new Error(errMsg);
+    return { ok: true, handedOff: true };
+  }
+
+  return nativePrint({ filePath, printerName, silent, options });
+});
 
 app.whenReady().then(async () => {
   buildMenu();

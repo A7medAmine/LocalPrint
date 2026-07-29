@@ -150,6 +150,17 @@ class StorageService {
     return `/api/files/public/${id}`;
   }
 
+  // Absolute path on the machine running the server — used by native
+  // printing in the Electron desktop app. Admin-only server-side.
+  async getFileLocalPath(id: string): Promise<string | null> {
+    try {
+      const data = await this.safeFetch(`/api/files/localpath/${id}`);
+      return typeof data?.path === "string" ? data.path : null;
+    } catch {
+      return null;
+    }
+  }
+
   async updateStatus(id: string, status: PrintStatus): Promise<void> {
     await this.safeFetch(`/api/jobs/${id}/status`, {
       method: "PUT",
@@ -183,6 +194,8 @@ class StorageService {
     cloudSyncPollInterval?: string;
     autoAcceptCloudJobs?: boolean;
     autoDeductStock?: boolean;
+    defaultPrinterName?: string;
+    printerDefaults?: Record<string, import("../types").PrinterJobDefaults>;
   }): Promise<void> {
     await this.safeFetch("/api/settings", {
       method: "POST",
@@ -251,6 +264,10 @@ class StorageService {
         cloudSyncPollInterval: settings?.cloudSyncPollInterval || undefined,
         autoAcceptCloudJobs: settings?.autoAcceptCloudJobs !== false,
         autoDeductStock: settings?.autoDeductStock === true,
+        defaultPrinterName: settings?.defaultPrinterName || "",
+        printerDefaults: settings?.printerDefaults && typeof settings.printerDefaults === "object"
+          ? settings.printerDefaults
+          : {},
       };
     } catch (e) {
       return { shopName: "PrintShop Hub", logoUrl: null, phoneNumbers: [], email: "", address: "", workingHours: "", returnPolicy: "" };
