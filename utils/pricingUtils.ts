@@ -167,10 +167,7 @@ export const calculateJobDiscount = (
   pageCount: number,
   rules: DiscountRule[]
 ): DiscountResult => {
-  console.log("calculateJobDiscount called:", { originalPrice, pageCount, rulesCount: rules?.length });
-
   if (!rules || rules.length === 0) {
-    console.log("No rules provided, returning no discount");
     return {
       rule: null,
       originalAmount: originalPrice,
@@ -180,27 +177,12 @@ export const calculateJobDiscount = (
     };
   }
 
-  // Filter rules that match this job's conditions
   const applicableRules = rules.filter((rule) => {
-    console.log("Checking rule:", rule.name, "type:", rule.condition_type, "threshold:", rule.threshold, "is_active:", rule.is_active);
-    if (!rule.is_active) {
-      console.log("  -> Rule not active, skipping");
-      return false;
-    }
-
-    if (rule.condition_type === "pages") {
-      const matches = pageCount >= rule.threshold;
-      console.log(`  -> Pages check: ${pageCount} >= ${rule.threshold} = ${matches}`);
-      return matches;
-    } else if (rule.condition_type === "amount") {
-      const matches = originalPrice >= rule.threshold;
-      console.log(`  -> Amount check: ${originalPrice} >= ${rule.threshold} = ${matches}`);
-      return matches;
-    }
+    if (!rule.is_active) return false;
+    if (rule.condition_type === "pages") return pageCount >= rule.threshold;
+    if (rule.condition_type === "amount") return originalPrice >= rule.threshold;
     return false;
   });
-
-  console.log("Applicable rules count:", applicableRules.length);
 
   if (applicableRules.length === 0) {
     return {

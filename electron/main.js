@@ -389,7 +389,10 @@ function nativePrint({ filePath, printerName, silent, options }) {
       // frame. Also covers the CSS-filter compositor race for grayscale.
       await new Promise((r) => setTimeout(r, PDF_RENDER_SETTLE_MS));
 
-      const { color: _dropped, ...restOptions } = options || {};
+      // Drop caller's `color` — see note above: always print color:true and
+      // let the grayscale CSS filter above (if any) do the desaturation.
+      const restOptions = { ...(options || {}) };
+      delete restOptions.color;
       const printOptions = {
         silent: silent === true,
         // Empty deviceName tells Chromium to use the OS default printer.

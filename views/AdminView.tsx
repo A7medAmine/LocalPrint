@@ -901,29 +901,42 @@ const AdminView: React.FC<AdminViewProps> = ({
     return printerDefaults[defaultPrinterName] || null;
   };
 
+  // Return signal for bulk mode. "ok" = queued at driver, "cancelled" = user
+  // dismissed the dialog (bulk should stop, not continue), "error" = failed,
+  // "unsupported" = precondition (no default printer, no file path, not
+  // Electron) — bulk should stop too since the same precondition applies to
+  // every remaining job.
+  type PrintOutcome = "ok" | "cancelled" | "error" | "unsupported";
+
   const printJobViaIpc = async (
     job: PrintJob,
     mode: "quick" | "options" | "open",
-  ) => {
+    opts?: { silentToasts?: boolean },
+  ): Promise<PrintOutcome> => {
+    const silentToasts = opts?.silentToasts === true;
+    const maybeToast = (t: Parameters<typeof toast>[0]) => {
+      if (!silentToasts) toast(t);
+    };
+
     if (!isElectron()) {
-      toast({
+      maybeToast({
         title: isRtl ? "الطباعة الأصلية غير متوفرة" : "Native printing unavailable",
         description: isRtl
           ? "افتح التطبيق من سطح المكتب للطباعة."
           : "Open the desktop app to print.",
         variant: "destructive",
       });
-      return;
+      return "unsupported";
     }
 
     const filePath = await storageService.getFileLocalPath(job.id);
     if (!filePath) {
-      toast({
+      maybeToast({
         title: isRtl ? "تعذر تحديد مسار الملف" : "Could not resolve file path",
         description: job.fileName,
         variant: "destructive",
       });
-      return;
+      return "error";
     }
 
     // Office docs — no printer/options; the OS handler takes over.
@@ -931,34 +944,36 @@ const AdminView: React.FC<AdminViewProps> = ({
       try {
         const result = await printFile({ filePath, fileType: job.fileType });
         if (result.ok) {
-          toast({
+          maybeToast({
             title: isRtl ? "تم فتح الملف في التطبيق الافتراضي" : "Opened in default app",
             description: job.fileName,
             variant: "success",
           });
+          return "ok";
         }
+        return "error";
       } catch (err) {
-        toast({
+        maybeToast({
           title: isRtl ? "تعذر فتح الملف" : "Failed to open file",
           description: err instanceof Error ? err.message : String(err),
           variant: "destructive",
         });
+        return "error";
       }
-      return;
     }
 
     // Quick Print requires a saved default printer — without one, silent
     // printing would fall through to "whatever Chromium picks" which is
     // exactly the surprise this feature is supposed to prevent.
     if (mode === "quick" && !defaultPrinterName) {
-      toast({
+      maybeToast({
         title: isRtl ? "لم يتم تعيين طابعة افتراضية" : "No default printer set",
         description: isRtl
           ? "اختر طابعة افتراضية من الإعدادات."
           : "Pick a default printer in Settings.",
         variant: "destructive",
       });
-      return;
+      return "unsupported";
     }
 
     // The job already carries the customer's chosen copies + color mode
@@ -990,24 +1005,27 @@ const AdminView: React.FC<AdminViewProps> = ({
         options,
       });
       if (result.cancelled) {
-        toast({ title: isRtl ? "تم إلغاء الطباعة" : "Print cancelled" });
-        return;
+        maybeToast({ title: isRtl ? "تم إلغاء الطباعة" : "Print cancelled" });
+        return "cancelled";
       }
       if (result.ok) {
-        toast({
+        maybeToast({
           title: mode === "quick"
             ? (isRtl ? "تم إرسال المهمة" : "Sent to printer")
             : (isRtl ? "تم إرسال المهمة" : "Print job submitted"),
           description: job.fileName,
           variant: "success",
         });
+        return "ok";
       }
+      return "error";
     } catch (err) {
-      toast({
+      maybeToast({
         title: isRtl ? "فشل الطباعة" : "Print failed",
         description: err instanceof Error ? err.message : String(err),
         variant: "destructive",
       });
+      return "error";
     }
   };
 
@@ -1015,19 +1033,85 @@ const AdminView: React.FC<AdminViewProps> = ({
   const handlePrintOptions = (job: PrintJob) => printJobViaIpc(job, "options");
   const handleOpenInApp = (job: PrintJob) => printJobViaIpc(job, "open");
 
+  const [bulkPrinting, setBulkPrinting] = useState(false);
+
   const handleBulkPrint = async () => {
     const selectedJobs = groups
       .flatMap((g) => g.jobs)
       .filter((j) => selectedJobIds.has(j.id));
-    if (selectedJobs.length === 0) return;
-    // Bulk = Quick Print each printable job in sequence. Office docs get
-    // handed to their default app the same way single-job Open does.
-    for (const job of selectedJobs) {
-      if (isOfficeFile(job.fileType)) {
-        await printJobViaIpc(job, "open");
-      } else {
-        await printJobViaIpc(job, "quick");
+    if (selectedJobs.length === 0 || bulkPrinting) return;
+
+    setBulkPrinting(true);
+    let sent = 0;
+    let failed = 0;
+    const failedNames: string[] = [];
+    let cancelled = false;
+
+    // Sequential + inter-job settle. Two back-to-back nativePrint windows
+    // race Chromium's compositor teardown/spinup and reproduce the "second
+    // job prints black" bug we thought we killed. A short pause between
+    // jobs (>= the print window's own settle) is enough to keep them from
+    // clobbering each other. Also: stop early on a cancel — the user
+    // dismissed a dialog, they don't want the rest to keep firing.
+    const INTER_JOB_MS = 400;
+
+    try {
+      for (let i = 0; i < selectedJobs.length; i++) {
+        const job = selectedJobs[i];
+        const mode = isOfficeFile(job.fileType) ? "open" : "quick";
+        const outcome = await printJobViaIpc(job, mode, { silentToasts: true });
+        if (outcome === "cancelled") {
+          cancelled = true;
+          break;
+        }
+        if (outcome === "unsupported") {
+          // Same precondition will fail every remaining job — bail with a
+          // single explanatory toast instead of N identical ones.
+          toast({
+            title: isRtl ? "الطباعة السريعة غير متاحة" : "Quick Print unavailable",
+            description: isRtl
+              ? "اختر طابعة افتراضية من الإعدادات."
+              : "Set a default printer in Settings, then try again.",
+            variant: "destructive",
+          });
+          setBulkPrinting(false);
+          return;
+        }
+        if (outcome === "ok") sent++;
+        else {
+          failed++;
+          failedNames.push(job.fileName);
+        }
+        // Don't sleep after the last job.
+        if (i < selectedJobs.length - 1) {
+          await new Promise((r) => setTimeout(r, INTER_JOB_MS));
+        }
       }
+    } finally {
+      setBulkPrinting(false);
+    }
+
+    // One summary toast at the end instead of N per-job toasts.
+    if (cancelled) {
+      toast({
+        title: isRtl ? "تم إيقاف الطباعة الجماعية" : "Bulk print stopped",
+        description: isRtl
+          ? `أُرسل ${sent} من ${selectedJobs.length} قبل الإلغاء.`
+          : `Sent ${sent} of ${selectedJobs.length} before cancel.`,
+      });
+    } else if (failed === 0) {
+      toast({
+        title: isRtl ? `تم إرسال ${sent} مهمة` : `Sent ${sent} job${sent === 1 ? "" : "s"}`,
+        variant: "success",
+      });
+    } else {
+      toast({
+        title: isRtl
+          ? `أُرسل ${sent}، فشل ${failed}`
+          : `${sent} sent, ${failed} failed`,
+        description: failedNames.slice(0, 3).join(", ") + (failedNames.length > 3 ? "…" : ""),
+        variant: "destructive",
+      });
     }
   };
 
@@ -1725,8 +1809,62 @@ const AdminView: React.FC<AdminViewProps> = ({
                 ))}
               </div>
             ) : groups.length === 0 ? (
-              <div className="p-12 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                <p>{t("noJobs")}</p>
+              <div className="px-6 py-14 sm:py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="max-w-sm mx-auto flex flex-col items-center text-center">
+                  <div className="relative w-40 h-40 sm:w-48 sm:h-48 mb-5">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 via-sky-100 to-transparent dark:from-indigo-500/10 dark:via-sky-500/10 dark:to-transparent rounded-full blur-2xl" />
+                    <svg viewBox="0 0 200 200" className="relative w-full h-full" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <defs>
+                        <linearGradient id="epPaper" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#ffffff" />
+                          <stop offset="100%" stopColor="#eef2ff" />
+                        </linearGradient>
+                        <linearGradient id="epBody" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#6366f1" />
+                          <stop offset="100%" stopColor="#4f46e5" />
+                        </linearGradient>
+                        <linearGradient id="epTop" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#818cf8" />
+                          <stop offset="100%" stopColor="#6366f1" />
+                        </linearGradient>
+                      </defs>
+                      <ellipse cx="100" cy="172" rx="62" ry="8" fill="currentColor" className="text-gray-200 dark:text-gray-900/60" />
+                      <rect x="52" y="46" width="96" height="46" rx="6" fill="url(#epPaper)" stroke="#c7d2fe" strokeWidth="1.5" />
+                      <line x1="64" y1="60" x2="122" y2="60" stroke="#c7d2fe" strokeWidth="3" strokeLinecap="round" />
+                      <line x1="64" y1="70" x2="112" y2="70" stroke="#dbeafe" strokeWidth="3" strokeLinecap="round" />
+                      <line x1="64" y1="80" x2="100" y2="80" stroke="#dbeafe" strokeWidth="3" strokeLinecap="round" />
+                      <rect x="42" y="86" width="116" height="56" rx="10" fill="url(#epBody)" />
+                      <rect x="42" y="86" width="116" height="14" rx="10" fill="url(#epTop)" />
+                      <rect x="58" y="118" width="84" height="34" rx="5" fill="url(#epPaper)" stroke="#c7d2fe" strokeWidth="1.5" />
+                      <circle cx="138" cy="107" r="3" fill="#34d399" />
+                      <circle cx="138" cy="107" r="6" fill="#34d399" opacity="0.25">
+                        <animate attributeName="r" values="4;9;4" dur="2.4s" repeatCount="indefinite" />
+                        <animate attributeName="opacity" values="0.35;0;0.35" dur="2.4s" repeatCount="indefinite" />
+                      </circle>
+                      <circle cx="52" cy="107" r="2" fill="#f472b6" opacity="0.7" />
+                      <path d="M76 132 h48" stroke="#c7d2fe" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M76 140 h32" stroke="#e0e7ff" strokeWidth="2" strokeLinecap="round" />
+                      <g opacity="0.9">
+                        <path d="M40 40 l4 -4 M40 40 l4 4 M40 40 l-4 4 M40 40 l-4 -4" stroke="#a5b4fc" strokeWidth="2" strokeLinecap="round">
+                          <animateTransform attributeName="transform" type="rotate" from="0 40 40" to="360 40 40" dur="8s" repeatCount="indefinite" />
+                        </path>
+                        <path d="M164 58 l3 -3 M164 58 l3 3 M164 58 l-3 3 M164 58 l-3 -3" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round">
+                          <animateTransform attributeName="transform" type="rotate" from="0 164 58" to="-360 164 58" dur="10s" repeatCount="indefinite" />
+                        </path>
+                        <circle cx="30" cy="120" r="2.5" fill="#f472b6" />
+                        <circle cx="172" cy="130" r="2.5" fill="#34d399" />
+                      </g>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    {isRtl ? "لا توجد طلبات طباعة بعد" : "No print jobs yet"}
+                  </h3>
+                  <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {isRtl
+                      ? "الطابعة مرتاحة الآن. أول طلب يصل سيظهر هنا مباشرة."
+                      : "Your printer is taking a breather. New jobs will land here the moment they arrive."}
+                  </p>
+                </div>
               </div>
             ) : filteredGroups.length === 0 ? (
               <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -2279,8 +2417,43 @@ const AdminView: React.FC<AdminViewProps> = ({
             </div>
 
             {reviewJobs.length === 0 ? (
-              <div className="p-12 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                <p>{isRtl ? "لا توجد طلبات بانتظار المراجعة" : "No jobs awaiting review"}</p>
+              <div className="px-6 py-14 sm:py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="max-w-sm mx-auto flex flex-col items-center text-center">
+                  <div className="relative w-36 h-36 sm:w-44 sm:h-44 mb-5">
+                    <div className="absolute inset-0 bg-gradient-to-br from-amber-100 via-emerald-100 to-transparent dark:from-amber-500/10 dark:via-emerald-500/10 dark:to-transparent rounded-full blur-2xl" />
+                    <svg viewBox="0 0 200 200" className="relative w-full h-full" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <defs>
+                        <linearGradient id="rvTray" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#fef3c7" />
+                          <stop offset="100%" stopColor="#fde68a" />
+                        </linearGradient>
+                      </defs>
+                      <ellipse cx="100" cy="170" rx="66" ry="8" fill="currentColor" className="text-gray-200 dark:text-gray-900/60" />
+                      <path d="M40 110 h120 l-10 46 a6 6 0 0 1 -6 5 h-88 a6 6 0 0 1 -6 -5 z" fill="url(#rvTray)" stroke="#f59e0b" strokeWidth="1.5" strokeLinejoin="round" />
+                      <path d="M40 110 h120 v-4 a4 4 0 0 0 -4 -4 h-112 a4 4 0 0 0 -4 4 z" fill="#fbbf24" />
+                      <g>
+                        <circle cx="100" cy="78" r="26" fill="#d1fae5" stroke="#10b981" strokeWidth="2" />
+                        <path d="M88 78 l8 8 l16 -18" stroke="#059669" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </g>
+                      <g>
+                        <path d="M52 54 l3 -3 M52 54 l3 3 M52 54 l-3 3 M52 54 l-3 -3" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round">
+                          <animateTransform attributeName="transform" type="rotate" from="0 52 54" to="360 52 54" dur="9s" repeatCount="indefinite" />
+                        </path>
+                        <circle cx="150" cy="46" r="2.5" fill="#34d399" />
+                        <circle cx="160" cy="70" r="2" fill="#fbbf24" opacity="0.8" />
+                        <circle cx="34" cy="88" r="2" fill="#f472b6" opacity="0.8" />
+                      </g>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    {isRtl ? "لا شيء للمراجعة" : "Inbox zero"}
+                  </h3>
+                  <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {isRtl
+                      ? "لا توجد طلبات بانتظار المراجعة. أحسنت — كل شيء تحت السيطرة."
+                      : "No jobs awaiting review. Nice work — you're all caught up."}
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="grid gap-3">
@@ -2466,7 +2639,19 @@ const AdminView: React.FC<AdminViewProps> = ({
                     <span className="text-[10px] text-gray-400 dark:text-gray-500">{isRtl ? "انقر للإدراج" : "Click to insert"}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {["{shopName}", "{fileName}", "{fileCount}", "{estimatedPrice}"].map((v) => (
+                    {[
+                      "{shopName}",
+                      "{fileName}",
+                      "{fileCount}",
+                      "{jobBreakdown}",
+                      "{totalPrice}",
+                      "{totalPages}",
+                      "{totalCopies}",
+                      "{totalSheets}",
+                      "{pageCount}",
+                      "{copies}",
+                      "{currency}",
+                    ].map((v) => (
                       <button
                         key={v}
                         type="button"

@@ -151,6 +151,7 @@ const CardIDTool: React.FC = () => {
   // physical card. Kept togglable in case someone's printer can't duplex or
   // they're printing to two separate sheets.
   const [duplex, setDuplex] = useState(true);
+  const [colorMode, setColorMode] = useState<"color" | "bw">("color");
   const [printing, setPrinting] = useState(false);
   const [defaultPrinter, setDefaultPrinter] = useState<string>("");
   const [printerDefaults, setPrinterDefaults] = useState<Record<string, PrinterJobDefaults>>({});
@@ -348,9 +349,13 @@ const CardIDTool: React.FC = () => {
       // Duplex: user's toggle wins. Long-edge is the standard for card layouts
       // where front is on the left half and back on the right half of the same
       // page, so flipping along the long edge aligns them.
+      // Color: pane toggle wins over the printer's saved default. `color: false`
+      // is translated in electron/main.js into a CSS grayscale filter on the
+      // hidden print window (Chromium's own color:false path prints solid
+      // black on this driver stack).
       const options = {
         duplexMode: duplex ? "longEdge" : "simplex",
-        color: saved?.color ?? true,
+        color: colorMode !== "bw",
         copies: saved?.copies ?? 1,
         collate: saved?.collate ?? true,
         landscape: saved?.landscape ?? false,
@@ -494,6 +499,23 @@ const CardIDTool: React.FC = () => {
             </p>
           </div>
           <Switch checked={duplex} onCheckedChange={setDuplex} />
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-input px-3 py-2">
+          <div className="min-w-0">
+            <Label className="text-xs font-medium cursor-pointer">
+              {isRtl ? "أبيض وأسود" : "Black & white"}
+            </Label>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {isRtl
+                ? "طباعة رمادية بدلاً من الألوان"
+                : "Print grayscale instead of color"}
+            </p>
+          </div>
+          <Switch
+            checked={colorMode === "bw"}
+            onCheckedChange={(on) => setColorMode(on ? "bw" : "color")}
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

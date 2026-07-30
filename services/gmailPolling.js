@@ -1,5 +1,6 @@
 import { fetchUnreadEmails } from "./gmailService.js";
-import { saveAttachment } from "./attachmentService.js";
+import { saveAttachment, getAttachmentFullPath } from "./attachmentService.js";
+import { countPagesForFile } from "./pageCountService.js";
 import db, {
   getGmailAccount,
   isEmailProcessed,
@@ -10,7 +11,30 @@ import db, {
   softDeletePendingEmail,
   getPendingEmailById,
   getSettings,
+  getPaperTypes,
 } from "../db.js";
+
+const CURRENCY = "DZD";
+
+function resolvePricePerPage(paperTypes, pricing, paperTypeId, colorMode) {
+  const isBW = colorMode === "blackWhite";
+  const paper = paperTypes.find((pt) => pt.id === paperTypeId);
+  if (paper) {
+    return isBW ? paper.blackWhitePerPage : paper.colorPerPage;
+  }
+  // Fallback to top-level pricing keys when the paper type is unknown.
+  const fallback = paperTypeId === "glossy"
+    ? pricing.glossyPerPage
+    : paperTypeId === "cardboard"
+      ? pricing.cardboardPerPage
+      : (isBW ? pricing.blackWhitePerPage : pricing.colorPerPage);
+  if (typeof fallback === "number") return fallback;
+  return isBW ? 15 : 30;
+}
+
+function formatMoney(amount) {
+  return `${(Number(amount) || 0).toFixed(2)} ${CURRENCY}`;
+}
 
 let pollingInterval = null;
 const DEFAULT_INTERVAL_MS = 60 * 1000;
@@ -169,6 +193,12 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
 
       const jobs = [];
       const jobFileNames = [];
+      const jobDetails = []; // { fileName, pageCount, copies, colorMode, paperTypeId, pricePerPage, totalPrice }
+
+      // Snapshot pricing config once per email so all attachments quote the same rates.
+      const settingsSnapshot = getSettings();
+      const pricingSnapshot = settingsSnapshot.pricing || {};
+      const paperTypesSnapshot = getPaperTypes();
 
       for (
         let attIdx = 0;
@@ -204,6 +234,18 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
           const copies = parseInt(ov.copies) || 1;
           const paperType = ov.paperType || "normal";
 
+          const pageCount = await countPagesForFile(
+            getAttachmentFullPath(savedPath),
+            att.mimeType
+          );
+          const pricePerPage = resolvePricePerPage(
+            paperTypesSnapshot,
+            pricingSnapshot,
+            paperType,
+            colorMode
+          );
+          const totalPrice = pricePerPage * pageCount * copies;
+
           db.prepare(
             `
             INSERT INTO jobs (
@@ -223,7 +265,7 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
             new Date().toISOString(),
             "PENDING",
             savedPath,
-            null,
+            pageCount,
             colorMode,
             copies,
             paperType,
@@ -232,6 +274,15 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
 
           jobs.push(jobId);
           jobFileNames.push(att.filename);
+          jobDetails.push({
+            fileName: att.filename,
+            pageCount,
+            copies,
+            colorMode,
+            paperTypeId: paperType,
+            pricePerPage,
+            totalPrice,
+          });
         } catch (err) {
           console.error(
             `  ❌ Failed to import attachment ${att.filename}:`,
@@ -259,17 +310,24 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
 
       // Auto-reply using template
       try {
-        const settings = getSettings();
         const { sendReply } = await import("./gmailService.js");
-        const pricing = settings.pricing || {};
+        const totalPrice = jobDetails.reduce((sum, j) => sum + j.totalPrice, 0);
+        const totalPages = jobDetails.reduce((sum, j) => sum + j.pageCount, 0);
+        const totalCopies = jobDetails.reduce((sum, j) => sum + j.copies, 0);
+        const totalSheets = jobDetails.reduce(
+          (sum, j) => sum + j.pageCount * j.copies,
+          0
+        );
+
         const template =
-          settings.gmailReplyTemplate ||
+          settingsSnapshot.gmailReplyTemplate ||
           [
             `Thank you for your print request!`,
             ``,
             `We have received your file(s) and will process them shortly.`,
             jobs.length > 0 ? `Files received: {fileCount}` : "",
-            `Estimated price: Starting from {estimatedPrice} per page (color)`,
+            jobDetails.length > 0 ? `{jobBreakdown}` : "",
+            jobDetails.length > 0 ? `Estimated total: {totalPrice}` : "",
             ``,
             `We will notify you when your prints are ready.`,
             ``,
@@ -278,14 +336,40 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
           ]
             .filter(Boolean)
             .join("\n");
+
+        const jobBreakdown = jobDetails
+          .map((j) => {
+            const mode = j.colorMode === "blackWhite" ? "B&W" : "Color";
+            const paperLabel = (paperTypesSnapshot.find((p) => p.id === j.paperTypeId)?.name) || j.paperTypeId;
+            return `• ${j.fileName} — ${j.pageCount} page(s) × ${j.copies} cop${j.copies === 1 ? "y" : "ies"} · ${mode} · ${paperLabel} = ${formatMoney(j.totalPrice)}`;
+          })
+          .join("\n");
+
+        // First priced job — powers single-value placeholders like {pageCount}/{copies}
+        // when the email carries only one attachment (the typical case).
+        const first = jobDetails[0] || null;
         const fileNames = jobFileNames.join(", ");
+
         const replyBody = template
-          .replace(/\{shopName\}/g, settings.shopName || "Print Shop")
+          .replace(/\{shopName\}/g, settingsSnapshot.shopName || "Print Shop")
           .replace(/\{fileName\}/g, fileNames || "your file")
           .replace(/\{fileCount\}/g, jobs.length.toString())
-          .replace(/\{estimatedPrice\}/g, `${pricing.colorPerPage || 30}`);
+          .replace(/\{jobBreakdown\}/g, jobBreakdown || "—")
+          .replace(/\{totalPrice\}/g, formatMoney(totalPrice))
+          .replace(/\{totalPages\}/g, totalPages.toString())
+          .replace(/\{totalCopies\}/g, totalCopies.toString())
+          .replace(/\{totalSheets\}/g, totalSheets.toString())
+          .replace(/\{pageCount\}/g, (first?.pageCount ?? totalPages).toString())
+          .replace(/\{copies\}/g, (first?.copies ?? totalCopies).toString())
+          .replace(/\{currency\}/g, CURRENCY)
+          // Back-compat: legacy templates still using {estimatedPrice} now get
+          // the real total (formatted with currency) instead of a per-page rate.
+          .replace(/\{estimatedPrice\}/g, formatMoney(totalPrice));
+
         await sendReply(pending.gmail_message_id, replyBody);
-        console.log(`  📧 Auto-reply sent for "${pending.subject}"`);
+        console.log(
+          `  📧 Auto-reply sent for "${pending.subject}" — quoted ${formatMoney(totalPrice)} across ${jobDetails.length} file(s)`
+        );
       } catch (err) {
         console.warn(`⚠️  Could not send auto-reply:`, err.message);
       }
