@@ -1,6 +1,7 @@
 import { fetchUnreadEmails } from "./gmailService.js";
 import { saveAttachment, getAttachmentFullPath } from "./attachmentService.js";
 import { countPagesForFile } from "./pageCountService.js";
+import { calculateJobDiscount } from "../utils/discountLogic.js";
 import db, {
   getGmailAccount,
   isEmailProcessed,
@@ -12,6 +13,7 @@ import db, {
   getPendingEmailById,
   getSettings,
   getPaperTypes,
+  getActiveDiscountRules,
 } from "../db.js";
 
 const CURRENCY = "DZD";
@@ -199,6 +201,7 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
       const settingsSnapshot = getSettings();
       const pricingSnapshot = settingsSnapshot.pricing || {};
       const paperTypesSnapshot = getPaperTypes();
+      const activeDiscountRules = getActiveDiscountRules();
 
       for (
         let attIdx = 0;
@@ -245,14 +248,20 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
             colorMode
           );
           const totalPrice = pricePerPage * pageCount * copies;
+          const totalSheets = pageCount * copies;
+          const discountResult = calculateJobDiscount(
+            totalPrice,
+            totalSheets,
+            activeDiscountRules
+          );
 
           db.prepare(
             `
             INSERT INTO jobs (
               id, customerName, customerEmail, notes, fileName, fileType,
               fileSize, uploadDate, status, serverFileName, pageCount,
-              colorMode, copies, paperType, source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              colorMode, copies, paperType, source, gmailMessageId
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `
           ).run(
             jobId,
@@ -269,7 +278,8 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
             colorMode,
             copies,
             paperType,
-            "gmail"
+            "gmail",
+            pending.gmail_message_id
           );
 
           jobs.push(jobId);
@@ -281,7 +291,10 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
             colorMode,
             paperTypeId: paperType,
             pricePerPage,
-            totalPrice,
+            originalPrice: totalPrice,
+            discountAmount: discountResult.discountAmount,
+            finalPrice: discountResult.finalAmount,
+            discountRule: discountResult.rule,
           });
         } catch (err) {
           console.error(
@@ -311,13 +324,22 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
       // Auto-reply using template
       try {
         const { sendReply } = await import("./gmailService.js");
-        const totalPrice = jobDetails.reduce((sum, j) => sum + j.totalPrice, 0);
+
+        const originalTotal = jobDetails.reduce((sum, j) => sum + j.originalPrice, 0);
+        const totalDiscount = jobDetails.reduce((sum, j) => sum + j.discountAmount, 0);
+        const finalTotal = jobDetails.reduce((sum, j) => sum + j.finalPrice, 0);
+        const savingsPercentage = originalTotal > 0
+          ? Math.round((totalDiscount / originalTotal) * 10000) / 100
+          : 0;
         const totalPages = jobDetails.reduce((sum, j) => sum + j.pageCount, 0);
         const totalCopies = jobDetails.reduce((sum, j) => sum + j.copies, 0);
         const totalSheets = jobDetails.reduce(
           (sum, j) => sum + j.pageCount * j.copies,
           0
         );
+        const appliedRuleNames = Array.from(
+          new Set(jobDetails.map((j) => j.discountRule?.name).filter(Boolean))
+        ).join(", ");
 
         const template =
           settingsSnapshot.gmailReplyTemplate ||
@@ -341,7 +363,10 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
           .map((j) => {
             const mode = j.colorMode === "blackWhite" ? "B&W" : "Color";
             const paperLabel = (paperTypesSnapshot.find((p) => p.id === j.paperTypeId)?.name) || j.paperTypeId;
-            return `• ${j.fileName} — ${j.pageCount} page(s) × ${j.copies} cop${j.copies === 1 ? "y" : "ies"} · ${mode} · ${paperLabel} = ${formatMoney(j.totalPrice)}`;
+            const priceStr = j.discountAmount > 0
+              ? `${formatMoney(j.originalPrice)} → ${formatMoney(j.finalPrice)} (${j.discountRule?.name || "discount"})`
+              : formatMoney(j.finalPrice);
+            return `• ${j.fileName} — ${j.pageCount} page(s) × ${j.copies} cop${j.copies === 1 ? "y" : "ies"} · ${mode} · ${paperLabel} = ${priceStr}`;
           })
           .join("\n");
 
@@ -355,20 +380,25 @@ export async function importPendingEmails(pendingIds, overrides = {}) {
           .replace(/\{fileName\}/g, fileNames || "your file")
           .replace(/\{fileCount\}/g, jobs.length.toString())
           .replace(/\{jobBreakdown\}/g, jobBreakdown || "—")
-          .replace(/\{totalPrice\}/g, formatMoney(totalPrice))
+          // {totalPrice} = discounted final. Use {originalTotal} for pre-discount.
+          .replace(/\{totalPrice\}/g, formatMoney(finalTotal))
+          .replace(/\{originalTotal\}/g, formatMoney(originalTotal))
+          .replace(/\{discountAmount\}/g, formatMoney(totalDiscount))
+          .replace(/\{savingsPercentage\}/g, `${savingsPercentage}%`)
+          .replace(/\{discountRule\}/g, appliedRuleNames || "—")
           .replace(/\{totalPages\}/g, totalPages.toString())
           .replace(/\{totalCopies\}/g, totalCopies.toString())
           .replace(/\{totalSheets\}/g, totalSheets.toString())
           .replace(/\{pageCount\}/g, (first?.pageCount ?? totalPages).toString())
           .replace(/\{copies\}/g, (first?.copies ?? totalCopies).toString())
           .replace(/\{currency\}/g, CURRENCY)
-          // Back-compat: legacy templates still using {estimatedPrice} now get
-          // the real total (formatted with currency) instead of a per-page rate.
-          .replace(/\{estimatedPrice\}/g, formatMoney(totalPrice));
+          // Back-compat: legacy templates using {estimatedPrice} now get the
+          // discounted total (formatted) — matching what the dashboard shows.
+          .replace(/\{estimatedPrice\}/g, formatMoney(finalTotal));
 
         await sendReply(pending.gmail_message_id, replyBody);
         console.log(
-          `  📧 Auto-reply sent for "${pending.subject}" — quoted ${formatMoney(totalPrice)} across ${jobDetails.length} file(s)`
+          `  📧 Auto-reply sent for "${pending.subject}" — quoted ${formatMoney(finalTotal)}${totalDiscount > 0 ? ` (saved ${formatMoney(totalDiscount)})` : ""} across ${jobDetails.length} file(s)`
         );
       } catch (err) {
         console.warn(`⚠️  Could not send auto-reply:`, err.message);

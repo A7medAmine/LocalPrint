@@ -106,6 +106,8 @@ try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentStatus TEXT DEFAULT 'UNPAID'`)
 try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentAmount REAL`); } catch (e) {}
 try { db.exec(`ALTER TABLE jobs ADD COLUMN paymentDate TEXT`); } catch (e) {}
 try { db.exec(`ALTER TABLE jobs ADD COLUMN cloudOrderId TEXT`); } catch (e) {}
+try { db.exec(`ALTER TABLE jobs ADD COLUMN gmailMessageId TEXT`); } catch (e) {}
+try { db.exec(`ALTER TABLE jobs ADD COLUMN notifiedReadyAt TEXT`); } catch (e) {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS cloud_imports (

@@ -261,6 +261,7 @@ const AdminView: React.FC<AdminViewProps> = ({
       setGmailConnected(status.connected);
       setGmailEmail(status.email || "");
       setGmailReplyTemplate(settings.replyTemplate || "");
+      setGmailReadyTemplate(settings.readyTemplate || "");
       setGmailPollInterval(settings.pollInterval || 60);
     } catch (err) {
       console.error("Failed to load Gmail status:", err);
@@ -494,27 +495,47 @@ const AdminView: React.FC<AdminViewProps> = ({
 
   const [gmailPollInterval, setGmailPollInterval] = useState(60);
   const [gmailReplyTemplate, setGmailReplyTemplate] = useState("");
+  const [gmailReadyTemplate, setGmailReadyTemplate] = useState("");
   const gmailReplyRef = useRef<HTMLTextAreaElement>(null);
+  const gmailReadyRef = useRef<HTMLTextAreaElement>(null);
 
-  const insertPlaceholder = (placeholder: string) => {
-    const textarea = gmailReplyRef.current;
+  const insertInto = (
+    ref: React.RefObject<HTMLTextAreaElement>,
+    value: string,
+    setValue: (v: string) => void,
+    placeholder: string,
+  ) => {
+    const textarea = ref.current;
     if (!textarea) return;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const before = gmailReplyTemplate.slice(0, start);
-    const after = gmailReplyTemplate.slice(end);
-    const next = before + placeholder + after;
-    setGmailReplyTemplate(next);
+    const next = value.slice(0, start) + placeholder + value.slice(end);
+    setValue(next);
     requestAnimationFrame(() => {
       textarea.focus();
       textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
     });
   };
 
+  const insertPlaceholder = (placeholder: string) =>
+    insertInto(gmailReplyRef, gmailReplyTemplate, setGmailReplyTemplate, placeholder);
+
+  const insertReadyPlaceholder = (placeholder: string) =>
+    insertInto(gmailReadyRef, gmailReadyTemplate, setGmailReadyTemplate, placeholder);
+
   const handleSaveReplyTemplate = async () => {
     try {
       await storageService.saveGmailReplyTemplate(gmailReplyTemplate);
       toast({ title: isRtl ? "تم حفظ قالب الرد" : "Reply template saved", variant: "success" });
+    } catch (err) {
+      toast({ title: "Failed to save", variant: "destructive" });
+    }
+  };
+
+  const handleSaveReadyTemplate = async () => {
+    try {
+      await storageService.saveGmailReadyTemplate(gmailReadyTemplate);
+      toast({ title: isRtl ? "تم حفظ قالب الإشعار" : "Ready template saved", variant: "success" });
     } catch (err) {
       toast({ title: "Failed to save", variant: "destructive" });
     }
@@ -1195,10 +1216,37 @@ const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleStatusChange = async (jobId: string, newStatus: PrintStatus) => {
-    await storageService.updateStatus(jobId, newStatus);
-    loadJobs();
-    // Marking a job printed can auto-deduct paper, so the badge may have moved.
-    if (newStatus === PrintStatus.PRINTED) loadLowStockCount();
+    // Optimistic update — patch the single job in-place so the list doesn't
+    // rebuild (avoids the skeleton flash, scroll jump, and lost expand state).
+    let previousStatus: PrintStatus | undefined;
+    setGroups((prev) =>
+      prev.map((g) => ({
+        ...g,
+        jobs: g.jobs.map((j) => {
+          if (j.id !== jobId) return j;
+          previousStatus = j.status;
+          return { ...j, status: newStatus };
+        }),
+      })),
+    );
+
+    try {
+      await storageService.updateStatus(jobId, newStatus);
+      // Marking a job printed can auto-deduct paper, so the badge may have moved.
+      if (newStatus === PrintStatus.PRINTED) loadLowStockCount();
+    } catch (err) {
+      // Roll back on failure.
+      if (previousStatus !== undefined) {
+        const rollbackTo = previousStatus;
+        setGroups((prev) =>
+          prev.map((g) => ({
+            ...g,
+            jobs: g.jobs.map((j) => (j.id === jobId ? { ...j, status: rollbackTo } : j)),
+          })),
+        );
+      }
+      toast({ title: isRtl ? "فشل تحديث الحالة" : "Failed to update status", variant: "destructive" });
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -2237,7 +2285,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                                           if (isOffice) return <span className="text-xs text-gray-400 dark:text-gray-500">-</span>;
                                           const pageCount = jobPageCounts[job.id] || 1;
                                           const priceCalc = calculatePrintPrice(job, currentSettings, pageCount);
-                                          const discountResult = calculateJobDiscount(job, priceCalc.totalPrice, pageCount, discountRules);
+                                          const discountResult = calculateJobDiscount(job, priceCalc.totalPrice, priceCalc.totalPages, discountRules);
                                           const hasDiscount = discountResult.discountAmount > 0;
 
                                           return (
@@ -2645,6 +2693,10 @@ const AdminView: React.FC<AdminViewProps> = ({
                       "{fileCount}",
                       "{jobBreakdown}",
                       "{totalPrice}",
+                      "{originalTotal}",
+                      "{discountAmount}",
+                      "{savingsPercentage}",
+                      "{discountRule}",
                       "{totalPages}",
                       "{totalCopies}",
                       "{totalSheets}",
@@ -2665,6 +2717,51 @@ const AdminView: React.FC<AdminViewProps> = ({
                   <textarea ref={gmailReplyRef} value={gmailReplyTemplate} onChange={(e) => setGmailReplyTemplate(e.target.value)} rows={4} className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg p-2 resize-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" placeholder={isRtl ? "اكتب قالب الرد هنا..." : "Write your reply template here..."} />
                   <div className="flex justify-end mt-2">
                     <Button size="sm" variant="outline" onClick={handleSaveReplyTemplate}>
+                      {isRtl ? "حفظ القالب" : "Save Template"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Ready Notification Template — sent when a gmail-sourced job flips to READY */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {isRtl ? "قالب إشعار الجاهزية" : "Ready Notification Template"}
+                    </h4>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{isRtl ? "انقر للإدراج" : "Click to insert"}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+                    {isRtl
+                      ? "يُرسَل تلقائيًا عند تحديد الطلب كـ«جاهز». يُرسَل مرة واحدة لكل طلب."
+                      : "Sent automatically when a job's status becomes READY. Fires once per job."}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {[
+                      "{shopName}",
+                      "{customerName}",
+                      "{fileName}",
+                      "{pageCount}",
+                      "{copies}",
+                      "{totalSheets}",
+                      "{paperType}",
+                      "{colorMode}",
+                      "{status}",
+                      "{totalPrice}",
+                      "{currency}",
+                    ].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => insertReadyPlaceholder(v)}
+                        className="px-2 py-0.5 text-xs font-mono bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-md hover:bg-emerald-200 dark:hover:bg-emerald-800/60 transition-colors active:scale-95"
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea ref={gmailReadyRef} value={gmailReadyTemplate} onChange={(e) => setGmailReadyTemplate(e.target.value)} rows={4} className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg p-2 resize-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" placeholder={isRtl ? "اترك فارغًا لاستخدام القالب الافتراضي" : "Leave empty to use the built-in default"} />
+                  <div className="flex justify-end mt-2">
+                    <Button size="sm" variant="outline" onClick={handleSaveReadyTemplate}>
                       {isRtl ? "حفظ القالب" : "Save Template"}
                     </Button>
                   </div>

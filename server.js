@@ -488,8 +488,39 @@ app.put("/api/jobs/:id/status", requireAdmin, (req, res) => {
         if (isEnabled()) updateCloudStatus(cloudOrderId, status).catch(() => {});
       }).catch(() => {});
     }
+
+    // Auto-notify the customer when a gmail-sourced job becomes READY.
+    // Idempotent via notifiedReadyAt — safe if the admin toggles status.
+    if (
+      status === "READY" &&
+      previousStatus !== "READY" &&
+      updatedJob?.source === "gmail" &&
+      updatedJob?.gmailMessageId &&
+      !updatedJob?.notifiedReadyAt
+    ) {
+      import('./services/gmailNotifier.js')
+        .then(({ sendJobReadyNotification }) => sendJobReadyNotification(jobId))
+        .then((r) => {
+          if (r.sent) console.log(`  📧 Ready notification sent for job ${jobId}`);
+          else if (r.reason !== "already_notified") console.warn(`⚠️  Ready notification skipped for ${jobId}: ${r.reason}`);
+        })
+        .catch((err) => console.warn(`⚠️  Ready notification failed for ${jobId}:`, err.message));
+    }
   } else {
     res.status(404).json({ success: false, error: "Job not found" });
+  }
+});
+
+// Manual re-send of the "ready" notification (admin can force from the UI
+// if the automatic send failed or the template was updated afterwards).
+app.post("/api/jobs/:id/notify-ready", requireAdmin, async (req, res) => {
+  try {
+    const { sendJobReadyNotification } = await import('./services/gmailNotifier.js');
+    const result = await sendJobReadyNotification(req.params.id, { force: true });
+    if (result.sent) return res.json({ success: true });
+    res.status(400).json({ success: false, error: result.reason });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -1747,13 +1778,14 @@ app.get('/api/gmail/attachment/:pendingId/:attachmentIndex', async (req, res) =>
   }
 });
 
-// Get Gmail settings (poll interval, reply template)
+// Get Gmail settings (poll interval, reply template, ready-notification template)
 app.get('/api/gmail/settings', requireAdmin, (req, res) => {
   try {
     const settings = getSettings();
     res.json({
       pollInterval: parseInt(settings.gmailPollInterval) || 60,
       replyTemplate: settings.gmailReplyTemplate || '',
+      readyTemplate: settings.gmailReadyTemplate || '',
     });
   } catch (err) {
     console.error("❌ Error getting Gmail settings:", err);
@@ -1761,7 +1793,7 @@ app.get('/api/gmail/settings', requireAdmin, (req, res) => {
   }
 });
 
-// Save Gmail settings (poll interval, reply template)
+// Save Gmail settings (poll interval, reply template, ready-notification template)
 app.post('/api/gmail/settings', requireAdmin, async (req, res) => {
   try {
     if (req.body.pollInterval) {
@@ -1771,6 +1803,9 @@ app.post('/api/gmail/settings', requireAdmin, async (req, res) => {
     }
     if (req.body.replyTemplate !== undefined) {
       updateSetting('gmailReplyTemplate', req.body.replyTemplate);
+    }
+    if (req.body.readyTemplate !== undefined) {
+      updateSetting('gmailReadyTemplate', req.body.readyTemplate);
     }
     res.json({ success: true });
   } catch (err) {

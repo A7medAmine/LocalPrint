@@ -432,7 +432,7 @@ class StorageService {
     return this.safeFetch("/api/gmail/poll-status");
   }
 
-  async getGmailSettings(): Promise<{ pollInterval: number; replyTemplate: string }> {
+  async getGmailSettings(): Promise<{ pollInterval: number; replyTemplate: string; readyTemplate: string }> {
     return this.safeFetch("/api/gmail/settings");
   }
 
@@ -470,6 +470,18 @@ class StorageService {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ replyTemplate: template }),
     });
+  }
+
+  async saveGmailReadyTemplate(template: string): Promise<void> {
+    await this.safeFetch("/api/gmail/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ readyTemplate: template }),
+    });
+  }
+
+  async sendJobReadyNotification(jobId: string): Promise<{ success: boolean; error?: string }> {
+    return this.safeFetch(`/api/jobs/${jobId}/notify-ready`, { method: "POST" });
   }
 
   // ── Bulk Actions ──────────────────────────────────────────
